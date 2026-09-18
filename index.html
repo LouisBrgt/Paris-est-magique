@@ -87,6 +87,12 @@
   .btn.danger{background:transparent;border-color:var(--danger);color:var(--danger)}
   .btn:disabled{opacity:.5;cursor:default}
   .link-btn{background:none;border:none;color:var(--moss-dark);text-decoration:underline;cursor:pointer;font-size:13px;padding:0}
+  .emoji-picker{display:flex;flex-wrap:wrap;gap:6px}
+  .emoji-opt{
+    border:1px solid var(--line);background:var(--white);border-radius:4px;
+    width:38px;height:38px;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;
+  }
+  .emoji-opt.selected{border-color:var(--ochre);border-width:2px;background:rgba(201,127,45,.15)}
   .geocode-suggestions{
     position:absolute;top:100%;left:0;right:0;
     background:var(--white);border:1px solid var(--line);border-top:none;
@@ -172,7 +178,7 @@
   /* ---- modales ---- */
   .overlay{
     position:fixed;inset:0;background:rgba(36,33,29,.45);
-    display:flex;align-items:center;justify-content:center;padding:20px;z-index:50;
+    display:flex;align-items:center;justify-content:center;padding:20px;z-index:2000;
   }
   .modal{
     background:var(--paper);border:1px solid var(--line);border-radius:4px;
@@ -360,6 +366,24 @@
             <option value="3">€€€</option>
           </select>
         </div>
+      </div>
+      <div class="field">
+        <label>Smiley (optionnel)</label>
+        <div class="emoji-picker" id="o-emoji-picker">
+          <button type="button" class="emoji-opt" data-emoji="🍽️">🍽️</button>
+          <button type="button" class="emoji-opt" data-emoji="🍹">🍹</button>
+          <button type="button" class="emoji-opt" data-emoji="🎨">🎨</button>
+          <button type="button" class="emoji-opt" data-emoji="🎵">🎵</button>
+          <button type="button" class="emoji-opt" data-emoji="🎉">🎉</button>
+          <button type="button" class="emoji-opt" data-emoji="🎬">🎬</button>
+          <button type="button" class="emoji-opt" data-emoji="🚶">🚶</button>
+          <button type="button" class="emoji-opt" data-emoji="☕">☕</button>
+          <button type="button" class="emoji-opt" data-emoji="🏖️">🏖️</button>
+          <button type="button" class="emoji-opt" data-emoji="🎮">🎮</button>
+          <button type="button" class="emoji-opt" data-emoji="❤️">❤️</button>
+          <button type="button" class="emoji-opt" data-emoji="✨">✨</button>
+        </div>
+        <input type="hidden" id="o-emoji" value="" />
       </div>
       <div class="field"><label>Description (optionnel)</label><textarea id="o-desc" rows="2"></textarea></div>
       <div class="field"><label>Lien (optionnel)</label><input id="o-url" placeholder="https://" /></div>
@@ -783,7 +807,7 @@ function renderCalendar(){
         const chip = document.createElement("div");
         chip.className = "cal-chip";
         chip.style.background = CATEGORY_COLORS[o.category] || "#888";
-        chip.textContent = o.title;
+        chip.textContent = (o.emoji ? o.emoji + " " : "") + o.title;
         chip.onclick = ()=> openDetail(o.id);
         cell.appendChild(chip);
       });
@@ -800,7 +824,7 @@ function renderCalendar(){
   ideas.forEach(o=>{
     const card = document.createElement("div");
     card.className = "idea-card";
-    card.innerHTML = `<div class="t">${escapeHtml(o.title)}</div><div class="meta">${o.category} - proposee par ${nameFor(o.created_by)}</div>`;
+    card.innerHTML = `<div class="t">${o.emoji ? escapeHtml(o.emoji) + " " : ""}${escapeHtml(o.title)}</div><div class="meta">${o.category} - proposee par ${nameFor(o.created_by)}</div>`;
     card.onclick = ()=> openDetail(o.id);
     ideasList.appendChild(card);
   });
@@ -824,14 +848,21 @@ function renderMap(){
   filteredOutings().filter(o=>o.lat && o.lng).forEach(o=>{
     const color = CATEGORY_COLORS[o.category] || "#888";
     const opacity = o.status === "faite" ? 0.45 : 1;
-    const icon = L.divIcon({
-      className: "",
-      html: `<div style="width:16px;height:16px;border-radius:50%;background:${color};opacity:${opacity};border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,.4)"></div>`,
-      iconSize: [16,16], iconAnchor: [8,8]
-    });
+    const icon = o.emoji
+      ? L.divIcon({
+          className: "",
+          html: `<div style="width:28px;height:28px;border-radius:50%;background:${color};opacity:${opacity};border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;font-size:15px;line-height:1">${o.emoji}</div>`,
+          iconSize: [28,28], iconAnchor: [14,14]
+        })
+      : L.divIcon({
+          className: "",
+          html: `<div style="width:16px;height:16px;border-radius:50%;background:${color};opacity:${opacity};border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,.4)"></div>`,
+          iconSize: [16,16], iconAnchor: [8,8]
+        });
     const marker = L.marker([o.lat, o.lng], { icon }).addTo(state.map);
-    marker.bindPopup(`<strong>${escapeHtml(o.title)}</strong><br/>${o.category}`);
-    marker.on("click", ()=> openDetail(o.id));
+    const emojiPrefix = o.emoji ? o.emoji + " " : "";
+    marker.bindPopup(`${emojiPrefix}<strong>${escapeHtml(o.title)}</strong><br/>${o.category}<br/><span style="font-size:11px;color:var(--ink-soft)">Double-clique pour les détails</span>`);
+    marker.on("dblclick", (e)=>{ L.DomEvent.stopPropagation(e); openDetail(o.id); });
     state.markers.push(marker);
   });
 }
@@ -845,6 +876,7 @@ document.getElementById("fab").onclick = ()=>{
   document.getElementById("outing-form").reset();
   document.getElementById("geocode-status").textContent = "";
   hideGeocodeSuggestions();
+  resetEmojiPicker();
   document.getElementById("outing-modal").dataset.lat = "";
   document.getElementById("outing-modal").dataset.lng = "";
   document.getElementById("outing-modal").classList.remove("hidden");
@@ -863,6 +895,7 @@ function openEditModal(o){
   document.getElementById("o-title").value = o.title || "";
   document.getElementById("o-category").value = o.category || "resto";
   document.getElementById("o-budget").value = o.budget || "";
+  selectEmoji(o.emoji || "");
   document.getElementById("o-desc").value = o.description || "";
   document.getElementById("o-url").value = o.url || "";
   document.getElementById("o-address").value = o.address || "";
@@ -876,6 +909,23 @@ function openEditModal(o){
 }
 document.querySelectorAll("[data-close]").forEach(btn=>{
   btn.addEventListener("click", (e)=> e.target.closest(".overlay").classList.add("hidden"));
+});
+
+function resetEmojiPicker(){
+  document.querySelectorAll("#o-emoji-picker .emoji-opt").forEach(b=>b.classList.remove("selected"));
+  document.getElementById("o-emoji").value = "";
+}
+function selectEmoji(emoji){
+  document.querySelectorAll("#o-emoji-picker .emoji-opt").forEach(b=>{
+    b.classList.toggle("selected", b.dataset.emoji === emoji);
+  });
+  document.getElementById("o-emoji").value = emoji || "";
+}
+document.querySelectorAll("#o-emoji-picker .emoji-opt").forEach(btn=>{
+  btn.addEventListener("click", ()=>{
+    const already = btn.classList.contains("selected");
+    selectEmoji(already ? "" : btn.dataset.emoji);
+  });
 });
 
 let geocodeDebounceTimer = null;
@@ -968,6 +1018,7 @@ document.getElementById("outing-form").addEventListener("submit", async (e)=>{
     title: document.getElementById("o-title").value.trim(),
     category: document.getElementById("o-category").value,
     budget: document.getElementById("o-budget").value || null,
+    emoji: document.getElementById("o-emoji").value || null,
     description: document.getElementById("o-desc").value.trim() || null,
     url: document.getElementById("o-url").value.trim() || null,
     address: document.getElementById("o-address").value.trim() || null,
