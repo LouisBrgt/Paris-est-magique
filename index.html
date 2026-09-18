@@ -465,6 +465,14 @@
     </div>
 
     <hr class="divider" />
+    <h3 style="font-size:14px;margin:0 0 8px">Commentaires</h3>
+    <div id="d-comments-list"></div>
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <input id="d-new-comment" placeholder="Ajouter un commentaire..." style="flex:1" />
+      <button class="btn secondary" id="d-add-comment">Envoyer</button>
+    </div>
+
+    <hr class="divider" />
     <button class="btn secondary" id="d-edit-btn" style="margin-right:8px">Modifier la sortie</button>
     <button class="btn danger" id="d-delete-btn">Supprimer la sortie</button>
   </div>
@@ -516,6 +524,7 @@ let state = {
   pollSlots: [],
   pollVotes: [],
   reviews: [],
+  comments: [],
   view: "calendar",
   calMonth: new Date().getMonth(),
   calYear: new Date().getFullYear(),
@@ -668,13 +677,14 @@ async function boot(){
 }
 
 async function loadAllData(){
-  const [{data: profiles}, {data: outings}, {data: interests}, {data: slots}, {data: votes}, {data: reviews}] = await Promise.all([
+  const [{data: profiles}, {data: outings}, {data: interests}, {data: slots}, {data: votes}, {data: reviews}, {data: comments}] = await Promise.all([
     sb.from("profiles").select("*"),
     sb.from("outings").select("*").order("start_at", { ascending: true }),
     sb.from("interests").select("*"),
     sb.from("poll_slots").select("*"),
     sb.from("poll_votes").select("*"),
-    sb.from("reviews").select("*")
+    sb.from("reviews").select("*"),
+    sb.from("comments").select("*").order("created_at", { ascending: true })
   ]);
   state.profiles = {};
   (profiles||[]).forEach(p => state.profiles[p.id] = p);
@@ -683,6 +693,7 @@ async function loadAllData(){
   state.pollSlots = slots || [];
   state.pollVotes = votes || [];
   state.reviews = reviews || [];
+  state.comments = comments || [];
   await preloadAvatars();
 }
 
@@ -1231,6 +1242,36 @@ function renderDetailModal(){
   } else {
     reviewSection.classList.add("hidden");
   }
+
+  // commentaires
+  const comments = state.comments.filter(c=>c.outing_id===o.id)
+    .sort((a,b)=> new Date(a.created_at) - new Date(b.created_at));
+  document.getElementById("d-comments-list").innerHTML = comments.map(c=>`
+    <div style="margin-bottom:10px;font-size:13px">
+      <strong>${escapeHtml(nameFor(c.user_id))}</strong>
+      <span style="color:var(--ink-soft);font-size:11px"> · ${new Date(c.created_at).toLocaleString("fr-FR",{dateStyle:"short",timeStyle:"short"})}</span>
+      ${c.user_id === state.profile.id ? `<button type="button" class="link-btn" data-comment-id="${c.id}" style="margin-left:6px">Supprimer</button>` : ""}
+      <div>${escapeHtml(c.content)}</div>
+    </div>
+  `).join("") || `<p style="font-size:13px;color:var(--ink-soft)">Aucun commentaire pour l'instant.</p>`;
+
+  document.querySelectorAll("#d-comments-list [data-comment-id]").forEach(btn=>{
+    btn.onclick = async ()=>{
+      const { error } = await sb.from("comments").delete().eq("id", btn.dataset.commentId);
+      if (error){ toast("Erreur : " + error.message); return; }
+      await loadAllData(); renderDetailModal();
+    };
+  });
+
+  document.getElementById("d-add-comment").onclick = async ()=>{
+    const input = document.getElementById("d-new-comment");
+    const content = input.value.trim();
+    if (!content) return;
+    const { error } = await sb.from("comments").insert({ outing_id:o.id, user_id:state.profile.id, content });
+    if (error){ toast("Erreur : " + error.message); return; }
+    input.value = "";
+    await loadAllData(); renderDetailModal();
+  };
 
   document.getElementById("d-edit-btn").onclick = ()=> openEditModal(o);
 
