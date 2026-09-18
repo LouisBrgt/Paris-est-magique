@@ -484,7 +484,9 @@ button.vote.mine{background:var(--accent-soft);border-color:var(--accent-soft);c
           <button type="button" data-theme-choice="light" role="radio">Clair</button>
           <button type="button" data-theme-choice="dark" role="radio">Sombre</button>
         </div>
+        <button type="button" id="friends-btn" role="menuitem">👥 Ami·e·s</button>
         <button type="button" id="trash-btn" role="menuitem">🗑️ Corbeille</button>
+        <button type="button" id="admin-btn" role="menuitem" class="hidden">🛠️ Administration</button>
         <button type="button" id="logout-btn" role="menuitem">Se déconnecter</button>
       </div>
     </div>
@@ -584,6 +586,13 @@ button.vote.mine{background:var(--accent-soft);border-color:var(--accent-soft);c
       <div class="field">
         <label for="o-date">Date (optionnel, sinon reste une idée)</label>
         <input type="datetime-local" id="o-date" />
+      </div>
+      <div class="field">
+        <span class="check-row">
+          <input type="checkbox" id="o-is-public" checked />
+          <label for="o-is-public" style="margin:0;font-weight:400">Sortie publique (visible par tout le groupe)</label>
+        </span>
+        <p style="font-size:12px;color:var(--ink-soft);margin:4px 0 0">Décoché, elle n'est visible que par toi et ton cercle d'ami·e·s.</p>
       </div>
 
       <details class="more-details" id="more-details">
@@ -693,6 +702,47 @@ button.vote.mine{background:var(--accent-soft);border-color:var(--accent-soft);c
     </div>
     <p style="font-size:13px;color:var(--ink-soft);margin:0 0 14px">Sorties archivées il y a moins de 30 jours.</p>
     <div id="trash-list"></div>
+  </div>
+</div>
+
+<!-- ================= MODALE : ami·e·s ================= -->
+<div id="friends-modal" class="overlay hidden">
+  <div class="modal">
+    <div class="modal-head">
+      <h2>Ami·e·s</h2>
+      <button class="icon-btn" data-close aria-label="Fermer">×</button>
+    </div>
+
+    <div id="friends-received" class="hidden">
+      <h3 style="font-size:14px;margin:0 0 8px">Demandes reçues</h3>
+      <div id="friends-received-list"></div>
+      <hr class="divider" />
+    </div>
+
+    <div id="friends-sent" class="hidden">
+      <h3 style="font-size:14px;margin:0 0 8px">Demandes envoyées</h3>
+      <div id="friends-sent-list"></div>
+      <hr class="divider" />
+    </div>
+
+    <h3 style="font-size:14px;margin:0 0 8px">Mes ami·e·s</h3>
+    <div id="friends-list"></div>
+
+    <hr class="divider" />
+    <h3 style="font-size:14px;margin:0 0 8px">Autres membres du groupe</h3>
+    <div id="friends-others-list"></div>
+  </div>
+</div>
+
+<!-- ================= MODALE : administration ================= -->
+<div id="admin-modal" class="overlay hidden">
+  <div class="modal">
+    <div class="modal-head">
+      <h2>Administration</h2>
+      <button class="icon-btn" data-close aria-label="Fermer">×</button>
+    </div>
+    <p style="font-size:13px;color:var(--ink-soft);margin:0 0 14px">Gère qui a le rôle administrateur·rice dans le groupe.</p>
+    <div id="admin-members-list"></div>
   </div>
 </div>
 
@@ -825,6 +875,7 @@ let state = {
   pollVotes: [],
   reviews: [],
   comments: [],
+  friendships: [],
   view: (function(){ try { return localStorage.getItem("sortiesView") || "calendar"; } catch(e){ return "calendar"; } })(),
   filters: {
     cats: storedFilters?.cats || CATEGORIES.slice(),
@@ -1031,6 +1082,159 @@ function renderTrash(){
   });
 }
 
+/* ============================================================
+   CERCLE D'AMI·E·S
+   ============================================================ */
+function friendshipBetween(otherId){
+  return state.friendships.find(f =>
+    (f.requester_id === state.profile.id && f.addressee_id === otherId) ||
+    (f.requester_id === otherId && f.addressee_id === state.profile.id)
+  );
+}
+function isFriendWith(otherId){
+  const f = friendshipBetween(otherId);
+  return !!f && f.status === "accepted";
+}
+
+document.getElementById("friends-btn").onclick = ()=>{
+  renderFriends();
+  document.getElementById("friends-modal").classList.remove("hidden");
+};
+
+function friendRow(profileId, actions){
+  const row = document.createElement("div");
+  row.className = "slot-row";
+  row.style.cssText = "display:flex;align-items:center;justify-content:space-between;gap:8px";
+  const left = document.createElement("span");
+  left.style.cssText = "display:flex;align-items:center;gap:8px";
+  left.innerHTML = `<img src="${avatarFor(profileId)}" alt="" style="width:28px;height:28px;border-radius:50%;object-fit:cover" />${escapeHtml(nameFor(profileId))}`;
+  row.appendChild(left);
+  const actionsEl = document.createElement("div");
+  actionsEl.style.cssText = "display:flex;gap:6px";
+  actions.forEach(({label, onClick, danger})=>{
+    const btn = document.createElement("button");
+    btn.className = "vote";
+    if (danger) btn.style.color = "var(--danger)";
+    btn.textContent = label;
+    btn.onclick = onClick;
+    actionsEl.appendChild(btn);
+  });
+  row.appendChild(actionsEl);
+  return row;
+}
+
+function renderFriends(){
+  const myId = state.profile.id;
+  const received = state.friendships.filter(f=> f.status==="pending" && f.addressee_id===myId);
+  const sent = state.friendships.filter(f=> f.status==="pending" && f.requester_id===myId);
+  const accepted = state.friendships.filter(f=> f.status==="accepted" && (f.requester_id===myId || f.addressee_id===myId));
+  const friendIds = accepted.map(f=> f.requester_id===myId ? f.addressee_id : f.requester_id);
+  const involvedIds = new Set([myId, ...friendIds, ...received.map(f=>f.requester_id), ...sent.map(f=>f.addressee_id)]);
+  const others = Object.keys(state.profiles).filter(id => !involvedIds.has(id));
+
+  const receivedSection = document.getElementById("friends-received");
+  const receivedList = document.getElementById("friends-received-list");
+  receivedList.innerHTML = "";
+  receivedSection.classList.toggle("hidden", received.length===0);
+  received.forEach(f=>{
+    receivedList.appendChild(friendRow(f.requester_id, [
+      { label:"Accepter", onClick: ()=> respondFriendRequest(f.id, "accepted") },
+      { label:"Refuser", onClick: ()=> respondFriendRequest(f.id, null), danger:true }
+    ]));
+  });
+
+  const sentSection = document.getElementById("friends-sent");
+  const sentList = document.getElementById("friends-sent-list");
+  sentList.innerHTML = "";
+  sentSection.classList.toggle("hidden", sent.length===0);
+  sent.forEach(f=>{
+    sentList.appendChild(friendRow(f.addressee_id, [
+      { label:"Annuler", onClick: ()=> cancelFriendship(f.id), danger:true }
+    ]));
+  });
+
+  const list = document.getElementById("friends-list");
+  list.innerHTML = "";
+  if (friendIds.length===0){
+    list.innerHTML = `<p style="font-size:13px;color:var(--ink-soft)">Pas encore d'ami·e·s.</p>`;
+  }
+  friendIds.forEach(id=>{
+    const f = accepted.find(x=> x.requester_id===id || x.addressee_id===id);
+    list.appendChild(friendRow(id, [
+      { label:"Retirer", onClick: ()=> cancelFriendship(f.id), danger:true }
+    ]));
+  });
+
+  const othersList = document.getElementById("friends-others-list");
+  othersList.innerHTML = "";
+  if (others.length===0){
+    othersList.innerHTML = `<p style="font-size:13px;color:var(--ink-soft)">Tout le monde est déjà dans ton cercle.</p>`;
+  }
+  others.forEach(id=>{
+    othersList.appendChild(friendRow(id, [
+      { label:"Ajouter", onClick: ()=> sendFriendRequest(id) }
+    ]));
+  });
+}
+
+async function sendFriendRequest(otherId){
+  const { error } = await sb.from("friendships").insert({ requester_id: state.profile.id, addressee_id: otherId, status:"pending" });
+  if (error){ toast("Erreur : " + error.message); return; }
+  await loadAllData(); renderFriends();
+  toast("Demande envoyée.");
+}
+async function respondFriendRequest(friendshipId, newStatus){
+  if (newStatus === null){
+    await sb.from("friendships").delete().eq("id", friendshipId);
+  } else {
+    await sb.from("friendships").update({ status: newStatus, responded_at: new Date().toISOString() }).eq("id", friendshipId);
+  }
+  await loadAllData(); renderFriends(); renderCurrentView();
+  toast(newStatus === "accepted" ? "Vous êtes ami·e·s !" : "Demande refusée.");
+}
+async function cancelFriendship(friendshipId){
+  const { error } = await sb.from("friendships").delete().eq("id", friendshipId);
+  if (error){ toast("Erreur : " + error.message); return; }
+  await loadAllData(); renderFriends(); renderCurrentView();
+}
+
+/* ============================================================
+   ADMINISTRATION
+   ============================================================ */
+document.getElementById("admin-btn").onclick = ()=>{
+  renderAdmin();
+  document.getElementById("admin-modal").classList.remove("hidden");
+};
+
+function renderAdmin(){
+  const list = document.getElementById("admin-members-list");
+  list.innerHTML = "";
+  Object.values(state.profiles).forEach(p=>{
+    const isMe = p.id === state.profile.id;
+    const row = friendRow(p.id, [
+      {
+        label: p.role === "admin" ? "Rétrograder" : "Promouvoir admin",
+        onClick: ()=> toggleAdminRole(p),
+        danger: p.role === "admin"
+      }
+    ]);
+    if (isMe) row.querySelector("button").disabled = true;
+    const badge = document.createElement("span");
+    badge.className = "status-badge";
+    badge.textContent = p.role === "admin" ? "Admin" : "Membre";
+    row.firstElementChild.appendChild(badge);
+    list.appendChild(row);
+  });
+}
+
+async function toggleAdminRole(profile){
+  const newRole = profile.role === "admin" ? "member" : "admin";
+  const { error } = await sb.from("profiles").update({ role: newRole }).eq("id", profile.id);
+  if (error){ toast("Erreur : " + error.message); return; }
+  await loadAllData(); renderAdmin();
+  toast(newRole === "admin" ? `${nameFor(profile.id)} est maintenant admin.` : `${nameFor(profile.id)} n'est plus admin.`);
+}
+
 sb.auth.onAuthStateChange((_event, session)=>{
   if (session && session.user){
     state.user = session.user;
@@ -1122,14 +1326,15 @@ async function boot(){
 }
 
 async function fetchAllData(){
-  const [{data: profiles}, {data: outings}, {data: interests}, {data: slots}, {data: votes}, {data: reviews}, {data: comments}] = await Promise.all([
+  const [{data: profiles}, {data: outings}, {data: interests}, {data: slots}, {data: votes}, {data: reviews}, {data: comments}, {data: friendships}] = await Promise.all([
     sb.from("profiles").select("*"),
     sb.from("outings").select("*").order("start_at", { ascending: true }),
     sb.from("interests").select("*"),
     sb.from("poll_slots").select("*"),
     sb.from("poll_votes").select("*"),
     sb.from("reviews").select("*"),
-    sb.from("comments").select("*").order("created_at", { ascending: true })
+    sb.from("comments").select("*").order("created_at", { ascending: true }),
+    sb.from("friendships").select("*")
   ]);
   state.profiles = {};
   (profiles||[]).forEach(p => state.profiles[p.id] = p);
@@ -1139,6 +1344,7 @@ async function fetchAllData(){
   state.pollVotes = votes || [];
   state.reviews = reviews || [];
   state.comments = comments || [];
+  state.friendships = friendships || [];
   await preloadAvatars();
 }
 
@@ -1222,9 +1428,14 @@ function nameFor(userId){
   return p ? `${p.first_name} ${p.last_name}` : "quelqu'un";
 }
 
+function isAdmin(){
+  return state.profile?.role === "admin";
+}
+
 function renderMe(){
   document.getElementById("me-avatar").src = avatarFor(state.profile.id);
   document.getElementById("me-name").textContent = state.profile.first_name;
+  document.getElementById("admin-btn").classList.toggle("hidden", !isAdmin());
 }
 
 function notify(msg){
@@ -1303,7 +1514,7 @@ function renderNextOutingBanner(){
   banner.innerHTML = `
     <div>
       <div class="nb-label">Prochaine sortie</div>
-      <div class="nb-title">${next.emoji ? escapeHtml(next.emoji) + " " : ""}${escapeHtml(next.title)}</div>
+      <div class="nb-title">${next.emoji ? escapeHtml(next.emoji) + " " : ""}${escapeHtml(next.title)}${next.is_public === false ? " 🔒" : ""}</div>
       <div class="nb-date">${dateLabel}</div>
     </div>
     <div class="nb-avatars">${avatarsHtml}</div>
@@ -1443,7 +1654,7 @@ function renderCalendar(){
         const chip = document.createElement("div");
         chip.className = "cal-chip";
         chip.style.background = CATEGORY_COLORS[o.category] || "#888";
-        chip.textContent = (o.emoji ? o.emoji + " " : "") + o.title;
+        chip.textContent = (o.emoji ? o.emoji + " " : "") + o.title + (o.is_public === false ? " 🔒" : "");
         chip.addEventListener("click", (e)=>{ e.stopPropagation(); openDetail(o.id); });
         cell.appendChild(chip);
       });
@@ -1462,7 +1673,7 @@ function renderCalendar(){
     card.className = "idea-card";
     card.tabIndex = 0;
     card.setAttribute("role", "button");
-    card.innerHTML = `<div class="t">${o.emoji ? escapeHtml(o.emoji) + " " : ""}${escapeHtml(o.title)}</div><div class="meta">${CATEGORY_EMOJI[o.category]||""} ${CATEGORY_LABELS[o.category]||o.category} · proposée par ${escapeHtml(nameFor(o.created_by))}</div>`;
+    card.innerHTML = `<div class="t">${o.emoji ? escapeHtml(o.emoji) + " " : ""}${escapeHtml(o.title)}${o.is_public === false ? " 🔒" : ""}</div><div class="meta">${CATEGORY_EMOJI[o.category]||""} ${CATEGORY_LABELS[o.category]||o.category} · proposée par ${escapeHtml(nameFor(o.created_by))}</div>`;
     card.addEventListener("click", ()=> openDetail(o.id));
     card.addEventListener("keydown", (e)=>{ if (e.key==="Enter"||e.key===" "){ e.preventDefault(); openDetail(o.id); } });
     ideasList.appendChild(card);
@@ -1516,7 +1727,7 @@ function renderMap(){
         });
     const marker = L.marker([o.lat, o.lng], { icon }).addTo(state.map);
     const emojiPrefix = o.emoji ? o.emoji + " " : "";
-    marker.bindPopup(`<div class="map-popup-body" data-outing-id="${o.id}">${emojiPrefix}<strong>${escapeHtml(o.title)}</strong><br/>${CATEGORY_EMOJI[o.category]||""} ${CATEGORY_LABELS[o.category]||o.category}<br/><span style="font-size:11px;color:var(--ink-soft)">Touche ici pour les détails</span></div>`);
+    marker.bindPopup(`<div class="map-popup-body" data-outing-id="${o.id}">${emojiPrefix}<strong>${escapeHtml(o.title)}</strong>${o.is_public === false ? " 🔒" : ""}<br/>${CATEGORY_EMOJI[o.category]||""} ${CATEGORY_LABELS[o.category]||o.category}<br/><span style="font-size:11px;color:var(--ink-soft)">Touche ici pour les détails</span></div>`);
     state.markers.push(marker);
   });
 }
@@ -1598,6 +1809,7 @@ function openEditModal(o){
   modal.dataset.lat = (o.lat !== null && o.lat !== undefined) ? o.lat : "";
   modal.dataset.lng = (o.lng !== null && o.lng !== undefined) ? o.lng : "";
   document.getElementById("o-date").value = o.start_at ? toDatetimeLocal(o.start_at) : "";
+  document.getElementById("o-is-public").checked = o.is_public !== false;
   document.getElementById("detail-modal").classList.add("hidden");
   modal.classList.remove("hidden");
 }
@@ -1699,6 +1911,7 @@ document.getElementById("outing-form").addEventListener("submit", async (e)=>{
     lat: modal.dataset.lat ? parseFloat(modal.dataset.lat) : null,
     lng: modal.dataset.lng ? parseFloat(modal.dataset.lng) : null,
     start_at: dateVal ? new Date(dateVal).toISOString() : null,
+    is_public: document.getElementById("o-is-public").checked,
     status
   };
 
@@ -1808,7 +2021,7 @@ document.getElementById("d-plan-confirm").onclick = async ()=>{
 function renderDetailModal(){
   const o = state.outings.find(x=>x.id===state.currentOutingId);
   if (!o) return;
-  document.getElementById("d-title").textContent = (o.emoji ? o.emoji + " " : "") + o.title;
+  document.getElementById("d-title").textContent = (o.emoji ? o.emoji + " " : "") + o.title + (o.is_public === false ? " 🔒" : "");
   document.getElementById("d-plan-inline").classList.add("hidden");
 
   const statusLabel = { idee:"Idée", planifiee:"Planifiée", faite:"Faite" }[o.status];
