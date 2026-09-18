@@ -434,6 +434,7 @@
     <p id="d-url"></p>
 
     <button class="btn secondary" id="d-invite-btn" style="margin-bottom:10px">🔗 Copier le lien d'invitation</button>
+    <button class="btn secondary hidden" id="d-ics-btn" style="margin-bottom:10px">📅 Ajouter à mon agenda</button>
 
     <div id="d-idea-actions"></div>
 
@@ -1125,6 +1126,12 @@ function renderDetailModal(){
     }
   };
 
+  const icsBtn = document.getElementById("d-ics-btn");
+  icsBtn.classList.toggle("hidden", !o.start_at);
+  if (o.start_at){
+    icsBtn.onclick = ()=> downloadIcs(o);
+  }
+
   // actions selon le statut
   const actionsEl = document.getElementById("d-idea-actions");
   actionsEl.innerHTML = "";
@@ -1243,6 +1250,49 @@ function escapeHtml(str){
   return String(str).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 }
 function escapeAttr(str){ return escapeHtml(str); }
+
+/* ============================================================
+   EXPORT .ICS
+   ============================================================ */
+function icsEscape(str){
+  return String(str||"").replace(/\\/g,"\\\\").replace(/;/g,"\\;").replace(/,/g,"\\,").replace(/\n/g,"\\n");
+}
+function icsDate(d){
+  return d.toISOString().replace(/[-:]/g,"").split(".")[0] + "Z";
+}
+function buildIcsContent(o){
+  const dtStart = new Date(o.start_at);
+  const dtEnd = new Date(dtStart.getTime() + 2*60*60*1000);
+  const lines = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//Sorties//FR",
+    "CALSCALE:GREGORIAN",
+    "BEGIN:VEVENT",
+    "UID:" + o.id + "@sorties.app",
+    "DTSTAMP:" + icsDate(new Date()),
+    "DTSTART:" + icsDate(dtStart),
+    "DTEND:" + icsDate(dtEnd),
+    "SUMMARY:" + icsEscape(o.title),
+    o.address ? "LOCATION:" + icsEscape(o.address) : null,
+    o.description ? "DESCRIPTION:" + icsEscape(o.description) : null,
+    "END:VEVENT",
+    "END:VCALENDAR"
+  ].filter(Boolean);
+  return lines.join("\r\n");
+}
+function downloadIcs(o){
+  const content = buildIcsContent(o);
+  const blob = new Blob([content], { type: "text/calendar;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = (o.title || "sortie").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"") + ".ics";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
 </script>
 </body>
 </html>
