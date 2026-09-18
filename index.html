@@ -494,11 +494,34 @@
   </div>
 </div>
 
+<!-- ================= MODALE : installer l'app ================= -->
+<div id="install-modal" class="overlay hidden">
+  <div class="modal">
+    <button class="modal-close" data-close>&times;</button>
+    <h2>📲 Installer Sorties</h2>
+    <div id="install-modal-body"></div>
+    <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap">
+      <button class="btn hidden" id="install-modal-action">Installer</button>
+      <button class="btn ghost" id="install-modal-later">Plus tard</button>
+      <button class="btn ghost" id="install-modal-never">Ne plus me demander</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast" class="toast hidden"></div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <script>
+/* ============================================================
+   PWA : PROMPT D'INSTALLATION (capturé au plus tôt)
+   ============================================================ */
+let deferredInstallPrompt = null;
+window.addEventListener("beforeinstallprompt", (e)=>{
+  e.preventDefault();
+  deferredInstallPrompt = e;
+});
+
 /* ============================================================
    CONFIGURATION
    ============================================================ */
@@ -726,6 +749,8 @@ async function boot(){
     pendingOutingId = null;
     history.replaceState(null, "", location.pathname + location.search);
     if (state.outings.some(o=>o.id===id)) openDetail(id);
+  } else {
+    setTimeout(maybeShowInstallPrompt, 1000);
   }
 }
 
@@ -1406,6 +1431,64 @@ if ("serviceWorker" in navigator){
     navigator.serviceWorker.register("sw.js").catch(()=>{});
   });
 }
+
+/* ============================================================
+   PWA : POPUP D'INSTALLATION
+   ============================================================ */
+function isStandaloneApp(){
+  return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+}
+function isInstallPromptDismissed(){
+  try { return localStorage.getItem("installPromptDismissed") === "1"; } catch(e){ return false; }
+}
+function dismissInstallPromptForever(){
+  try { localStorage.setItem("installPromptDismissed", "1"); } catch(e){}
+}
+
+function maybeShowInstallPrompt(){
+  if (isStandaloneApp() || isInstallPromptDismissed()) return;
+  const ua = navigator.userAgent;
+  const isIOS = /iphone|ipad|ipod/i.test(ua) && !window.MSStream;
+  const isAndroid = /android/i.test(ua);
+  if (!isIOS && !isAndroid) return;
+
+  const modal = document.getElementById("install-modal");
+  const body = document.getElementById("install-modal-body");
+  const actionBtn = document.getElementById("install-modal-action");
+
+  if (isIOS){
+    body.innerHTML = `
+      <p style="font-size:14px">Installe "Sorties" sur ton écran d'accueil pour l'ouvrir comme une vraie app :</p>
+      <ol style="padding-left:18px;font-size:14px;margin:10px 0">
+        <li>Appuie sur <strong>Partager</strong> (le carré avec la flèche) en bas de Safari</li>
+        <li>Fais défiler et appuie sur <strong>"Sur l'écran d'accueil"</strong></li>
+        <li>Appuie sur <strong>"Ajouter"</strong></li>
+      </ol>
+    `;
+    actionBtn.classList.add("hidden");
+  } else {
+    body.innerHTML = `<p style="font-size:14px">Installe "Sorties" sur ton écran d'accueil pour l'ouvrir comme une vraie app, en un clic.</p>`;
+    actionBtn.classList.remove("hidden");
+    actionBtn.onclick = async ()=>{
+      if (deferredInstallPrompt){
+        deferredInstallPrompt.prompt();
+        await deferredInstallPrompt.userChoice;
+        deferredInstallPrompt = null;
+      }
+      modal.classList.add("hidden");
+    };
+  }
+
+  modal.classList.remove("hidden");
+}
+
+document.getElementById("install-modal-later").onclick = ()=>{
+  document.getElementById("install-modal").classList.add("hidden");
+};
+document.getElementById("install-modal-never").onclick = ()=>{
+  dismissInstallPromptForever();
+  document.getElementById("install-modal").classList.add("hidden");
+};
 
 /* ============================================================
    EXPORT .ICS
