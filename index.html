@@ -273,6 +273,8 @@
       <label><input type="checkbox" class="cat-filter" value="bar" checked /> Bars</label>
       <label><input type="checkbox" class="cat-filter" value="expo" checked /> Expos</label>
       <label><input type="checkbox" class="cat-filter" value="concert" checked /> Concerts</label>
+      <label><input type="checkbox" class="cat-filter" value="soirées" checked /> Soirées</label>
+      <label><input type="checkbox" class="cat-filter" value="ciné" checked /> Ciné</label>
       <label><input type="checkbox" class="cat-filter" value="balade" checked /> Balades</label>
       <label><input type="checkbox" class="cat-filter" value="autre" checked /> Autre</label>
       <select id="budget-filter">
@@ -322,6 +324,8 @@
             <option value="bar">Bar</option>
             <option value="expo">Expo</option>
             <option value="concert">Concert</option>
+            <option value="resto">Ciné</option>
+            <option value="soiree">Soiree</option>
             <option value="balade">Balade</option>
             <option value="autre">Autre</option>
           </select>
@@ -415,7 +419,9 @@ const CATEGORY_COLORS = {
   bar:     "#2F4A3C",
   expo:    "#7A4A6B",
   concert: "#A6402F",
+  ciné: "#3A3450"
   balade:  "#3D6E8C",
+  soirées: "#8C5E3C"
   autre:   "#807A68"
 };
 const DOW = ["Lu","Ma","Me","Je","Ve","Sa","Di"];
