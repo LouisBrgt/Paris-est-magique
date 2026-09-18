@@ -252,6 +252,14 @@ nav.tabs button.active{color:var(--accent-ink);background:var(--accent)}
   color:var(--ink);border-radius:999px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;min-height:40px;
 }
 .cat-pill[aria-pressed="true"]{border-color:transparent;color:var(--accent-ink)}
+.cat-pill.visibility-pill[aria-pressed="true"]{background:var(--accent)}
+.invitee-picker{display:flex;flex-wrap:wrap;gap:8px}
+.invitee-pill{
+  display:inline-flex;align-items:center;gap:6px;border:2px solid var(--line);background:var(--bg);
+  color:var(--ink);border-radius:999px;padding:6px 12px 6px 6px;font-size:13px;font-weight:600;cursor:pointer;min-height:44px;
+}
+.invitee-pill img{width:26px;height:26px;border-radius:50%;object-fit:cover}
+.invitee-pill[aria-pressed="true"]{border-color:var(--accent-soft);background:color-mix(in srgb, var(--accent-soft) 15%, transparent)}
 .filters-row-controls{display:flex;flex-wrap:wrap;gap:14px;align-items:center;font-size:14px}
 .filters-row-controls select{border:1px solid var(--line);background:var(--bg);padding:8px 10px;border-radius:8px;font-size:14px;min-height:40px}
 .check-row{display:flex;align-items:center;gap:8px;min-height:40px}
@@ -518,6 +526,10 @@ button.vote.mine{background:var(--accent-soft);border-color:var(--accent-soft);c
           <input type="checkbox" id="show-done" />
           <label for="show-done" style="margin:0;font-weight:400">Afficher les sorties faites</label>
         </span>
+        <span class="check-row">
+          <input type="checkbox" id="only-private" />
+          <label for="only-private" style="margin:0;font-weight:400">Mes sorties privées</label>
+        </span>
       </div>
     </div>
   </div>
@@ -587,12 +599,20 @@ button.vote.mine{background:var(--accent-soft);border-color:var(--accent-soft);c
         <label for="o-date">Date (optionnel, sinon reste une idée)</label>
         <input type="datetime-local" id="o-date" />
       </div>
-      <div class="field">
-        <span class="check-row">
-          <input type="checkbox" id="o-is-public" checked />
-          <label for="o-is-public" style="margin:0;font-weight:400">Sortie publique (visible par tout le groupe)</label>
-        </span>
-        <p style="font-size:12px;color:var(--ink-soft);margin:4px 0 0">Décoché, elle n'est visible que par toi et ton cercle d'ami·e·s.</p>
+      <div class="field" id="o-visibility-field">
+        <span style="display:block;font-size:13px;color:var(--ink-soft);margin-bottom:5px;font-weight:600">Visibilité</span>
+        <div class="pill-row" id="o-visibility-picker" role="radiogroup" aria-label="Visibilité de la sortie">
+          <button type="button" class="cat-pill visibility-pill" data-visibility="public" aria-pressed="true">🌍 Public</button>
+          <button type="button" class="cat-pill visibility-pill" data-visibility="selection" aria-pressed="false">👥 Sélection</button>
+          <button type="button" class="cat-pill visibility-pill" data-visibility="prive" aria-pressed="false">🔒 Privé</button>
+        </div>
+        <input type="hidden" id="o-visibility" value="public" />
+        <p style="font-size:12px;color:var(--ink-soft);margin:6px 0 0" id="o-visibility-hint">Visible par tout le groupe.</p>
+
+        <div id="o-invitees-field" class="hidden" style="margin-top:12px">
+          <span style="display:block;font-size:13px;color:var(--ink-soft);margin-bottom:6px;font-weight:600">Qui est invité·e ? <span id="o-invitees-count"></span></span>
+          <div id="o-invitees-picker"></div>
+        </div>
       </div>
 
       <details class="more-details" id="more-details">
@@ -676,6 +696,12 @@ button.vote.mine{background:var(--accent-soft);border-color:var(--accent-soft);c
       <h3 style="font-size:14px;margin:0 0 8px">Avis</h3>
       <div id="d-reviews"></div>
       <div class="field"><label for="d-comment">Un mot sur cette sortie (optionnel)</label><textarea id="d-comment" rows="2"></textarea></div>
+    </div>
+
+    <div id="d-invitees-section" class="hidden">
+      <hr class="divider" />
+      <h3 style="font-size:14px;margin:0 0 8px">Invité·e·s</h3>
+      <div class="avatars-row" id="d-invitees"></div>
     </div>
 
     <hr class="divider" />
@@ -876,11 +902,13 @@ let state = {
   reviews: [],
   comments: [],
   friendships: [],
+  outingInvitees: [],
   view: (function(){ try { return localStorage.getItem("sortiesView") || "calendar"; } catch(e){ return "calendar"; } })(),
   filters: {
     cats: storedFilters?.cats || CATEGORIES.slice(),
     budget: storedFilters?.budget || "",
-    showDone: storedFilters?.showDone || false
+    showDone: storedFilters?.showDone || false,
+    onlyPrivate: storedFilters?.onlyPrivate || false
   },
   calMonth: new Date().getMonth(),
   calYear: new Date().getFullYear(),
@@ -1335,7 +1363,7 @@ async function boot(){
 }
 
 async function fetchAllData(){
-  const [{data: profiles}, {data: outings}, {data: interests}, {data: slots}, {data: votes}, {data: reviews}, {data: comments}, {data: friendships}] = await Promise.all([
+  const [{data: profiles}, {data: outings}, {data: interests}, {data: slots}, {data: votes}, {data: reviews}, {data: comments}, {data: friendships}, {data: invitees}] = await Promise.all([
     sb.from("profiles").select("*"),
     sb.from("outings").select("*").order("start_at", { ascending: true }),
     sb.from("interests").select("*"),
@@ -1343,7 +1371,8 @@ async function fetchAllData(){
     sb.from("poll_votes").select("*"),
     sb.from("reviews").select("*"),
     sb.from("comments").select("*").order("created_at", { ascending: true }),
-    sb.from("friendships").select("*")
+    sb.from("friendships").select("*"),
+    sb.from("outing_invitees").select("*")
   ]);
   state.profiles = {};
   (profiles||[]).forEach(p => state.profiles[p.id] = p);
@@ -1354,6 +1383,7 @@ async function fetchAllData(){
   state.reviews = reviews || [];
   state.comments = comments || [];
   state.friendships = friendships || [];
+  state.outingInvitees = invitees || [];
   await preloadAvatars();
 }
 
@@ -1464,13 +1494,19 @@ function handleRealtimeChange(payload){
     const outing = state.outings.find(o=>o.id===newRow.outing_id);
     notify(`🔥 ${nameFor(newRow.user_id)} vient à "${outing ? outing.title : "une sortie"}"`);
   }
+  if (table === "outing_invitees" && eventType === "INSERT" && newRow.user_id === state.profile?.id){
+    const outing = state.outings.find(o=>o.id===newRow.outing_id);
+    if (outing){
+      notify(`${nameFor(outing.created_by)} te propose : ${outing.title}`);
+    }
+  }
 }
 
 function subscribeRealtime(){
   sb.channel("public-changes")
     .on("postgres_changes", { event: "*", schema: "public" }, async (payload)=>{
-      handleRealtimeChange(payload);
       await loadAllData();
+      handleRealtimeChange(payload);
       renderCurrentView();
       if (state.currentOutingId && !document.getElementById("detail-modal").classList.contains("hidden")){
         renderDetailModal();
@@ -1523,7 +1559,7 @@ function renderNextOutingBanner(){
   banner.innerHTML = `
     <div>
       <div class="nb-label">Prochaine sortie</div>
-      <div class="nb-title">${next.emoji ? escapeHtml(next.emoji) + " " : ""}${escapeHtml(next.title)}${next.is_public === false ? " 🔒" : ""}</div>
+      <div class="nb-title">${next.emoji ? escapeHtml(next.emoji) + " " : ""}${escapeHtml(next.title)}${visibilityBadge(next)}</div>
       <div class="nb-date">${dateLabel}</div>
     </div>
     <div class="nb-avatars">${avatarsHtml}</div>
@@ -1567,7 +1603,7 @@ function updateFilterPillsUI(){
 }
 function updateFiltersBadge(){
   const offCats = CATEGORIES.length - state.filters.cats.length;
-  const count = offCats + (state.filters.budget ? 1 : 0) + (state.filters.showDone ? 1 : 0);
+  const count = offCats + (state.filters.budget ? 1 : 0) + (state.filters.showDone ? 1 : 0) + (state.filters.onlyPrivate ? 1 : 0);
   const badge = document.getElementById("filters-badge");
   badge.textContent = String(count);
   badge.classList.toggle("hidden", count === 0);
@@ -1576,6 +1612,7 @@ function restoreFiltersUI(){
   updateFilterPillsUI();
   document.getElementById("budget-filter").value = state.filters.budget;
   document.getElementById("show-done").checked = state.filters.showDone;
+  document.getElementById("only-private").checked = state.filters.onlyPrivate;
   updateFiltersBadge();
 }
 
@@ -1593,6 +1630,10 @@ document.getElementById("show-done").addEventListener("change", (e)=>{
   state.filters.showDone = e.target.checked;
   persistFilters(); updateFiltersBadge(); renderCurrentView();
 });
+document.getElementById("only-private").addEventListener("change", (e)=>{
+  state.filters.onlyPrivate = e.target.checked;
+  persistFilters(); updateFiltersBadge(); renderCurrentView();
+});
 
 function filteredOutings(){
   return state.outings.filter(o=>{
@@ -1600,6 +1641,7 @@ function filteredOutings(){
     if (!state.filters.cats.includes(o.category)) return false;
     if (state.filters.budget && String(o.budget) !== state.filters.budget) return false;
     if (o.status === "faite" && !state.filters.showDone) return false;
+    if (state.filters.onlyPrivate && (o.visibility || "public") === "public") return false;
     return true;
   });
 }
@@ -1663,7 +1705,7 @@ function renderCalendar(){
         const chip = document.createElement("div");
         chip.className = "cal-chip";
         chip.style.background = CATEGORY_COLORS[o.category] || "#888";
-        chip.textContent = (o.emoji ? o.emoji + " " : "") + o.title + (o.is_public === false ? " 🔒" : "");
+        chip.textContent = (o.emoji ? o.emoji + " " : "") + o.title + visibilityBadge(o);
         chip.addEventListener("click", (e)=>{ e.stopPropagation(); openDetail(o.id); });
         cell.appendChild(chip);
       });
@@ -1682,7 +1724,7 @@ function renderCalendar(){
     card.className = "idea-card";
     card.tabIndex = 0;
     card.setAttribute("role", "button");
-    card.innerHTML = `<div class="t">${o.emoji ? escapeHtml(o.emoji) + " " : ""}${escapeHtml(o.title)}${o.is_public === false ? " 🔒" : ""}</div><div class="meta">${CATEGORY_EMOJI[o.category]||""} ${CATEGORY_LABELS[o.category]||o.category} · proposée par ${escapeHtml(nameFor(o.created_by))}</div>`;
+    card.innerHTML = `<div class="t">${o.emoji ? escapeHtml(o.emoji) + " " : ""}${escapeHtml(o.title)}${visibilityBadge(o)}</div><div class="meta">${CATEGORY_EMOJI[o.category]||""} ${CATEGORY_LABELS[o.category]||o.category} · proposée par ${escapeHtml(nameFor(o.created_by))}</div>`;
     card.addEventListener("click", ()=> openDetail(o.id));
     card.addEventListener("keydown", (e)=>{ if (e.key==="Enter"||e.key===" "){ e.preventDefault(); openDetail(o.id); } });
     ideasList.appendChild(card);
@@ -1736,7 +1778,7 @@ function renderMap(){
         });
     const marker = L.marker([o.lat, o.lng], { icon }).addTo(state.map);
     const emojiPrefix = o.emoji ? o.emoji + " " : "";
-    marker.bindPopup(`<div class="map-popup-body" data-outing-id="${o.id}">${emojiPrefix}<strong>${escapeHtml(o.title)}</strong>${o.is_public === false ? " 🔒" : ""}<br/>${CATEGORY_EMOJI[o.category]||""} ${CATEGORY_LABELS[o.category]||o.category}<br/><span style="font-size:11px;color:var(--ink-soft)">Touche ici pour les détails</span></div>`);
+    marker.bindPopup(`<div class="map-popup-body" data-outing-id="${o.id}">${emojiPrefix}<strong>${escapeHtml(o.title)}</strong>${visibilityBadge(o)}<br/>${CATEGORY_EMOJI[o.category]||""} ${CATEGORY_LABELS[o.category]||o.category}<br/><span style="font-size:11px;color:var(--ink-soft)">Touche ici pour les détails</span></div>`);
     state.markers.push(marker);
   });
 }
@@ -1770,6 +1812,48 @@ document.getElementById("o-category").addEventListener("change", (e)=>{
   if (!state.emojiManuallySet) selectEmoji(CATEGORY_EMOJI[e.target.value] || "", false);
 });
 
+/* ---- visibilite & invites ---- */
+const VISIBILITY_HINTS = {
+  public: "Visible par tout le groupe.",
+  selection: "Visible uniquement par les personnes que tu invites ci-dessous.",
+  prive: "Visible uniquement par toi."
+};
+let selectedInvitees = new Set();
+
+function setVisibility(value){
+  document.getElementById("o-visibility").value = value;
+  document.querySelectorAll("#o-visibility-picker .visibility-pill").forEach(btn=>{
+    btn.setAttribute("aria-pressed", String(btn.dataset.visibility === value));
+  });
+  document.getElementById("o-visibility-hint").textContent = VISIBILITY_HINTS[value] || "";
+  document.getElementById("o-invitees-field").classList.toggle("hidden", value !== "selection");
+  if (value === "selection") renderInviteesPicker();
+}
+document.querySelectorAll("#o-visibility-picker .visibility-pill").forEach(btn=>{
+  btn.addEventListener("click", ()=> setVisibility(btn.dataset.visibility));
+});
+
+function renderInviteesPicker(){
+  const picker = document.getElementById("o-invitees-picker");
+  picker.innerHTML = "";
+  picker.className = "invitee-picker";
+  Object.values(state.profiles).filter(p=>p.id !== state.profile.id).forEach(p=>{
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "invitee-pill";
+    btn.setAttribute("aria-pressed", String(selectedInvitees.has(p.id)));
+    btn.innerHTML = `<img src="${avatarFor(p.id)}" alt="" />${escapeHtml(p.first_name)}`;
+    btn.onclick = ()=>{
+      if (selectedInvitees.has(p.id)) selectedInvitees.delete(p.id);
+      else selectedInvitees.add(p.id);
+      renderInviteesPicker();
+    };
+    picker.appendChild(btn);
+  });
+  const count = selectedInvitees.size;
+  document.getElementById("o-invitees-count").textContent = count > 0 ? `· ${count} personne${count>1?"s":""}` : "";
+}
+
 function toDatetimeLocal(dateOrIso){
   const d = new Date(dateOrIso);
   const pad = n => String(n).padStart(2, "0");
@@ -1787,6 +1871,9 @@ function openCreateModal(prefill){
   resetEmojiPicker();
   const modal = document.getElementById("outing-modal");
   modal.dataset.lat = ""; modal.dataset.lng = "";
+  document.getElementById("o-visibility-field").classList.remove("hidden");
+  selectedInvitees = new Set();
+  setVisibility("public");
 
   const defaultCat = document.getElementById("o-category").value;
   selectEmoji(CATEGORY_EMOJI[defaultCat] || "", false);
@@ -1818,7 +1905,14 @@ function openEditModal(o){
   modal.dataset.lat = (o.lat !== null && o.lat !== undefined) ? o.lat : "";
   modal.dataset.lng = (o.lng !== null && o.lng !== undefined) ? o.lng : "";
   document.getElementById("o-date").value = o.start_at ? toDatetimeLocal(o.start_at) : "";
-  document.getElementById("o-is-public").checked = o.is_public !== false;
+
+  const iAmCreator = o.created_by === state.profile.id;
+  document.getElementById("o-visibility-field").classList.toggle("hidden", !iAmCreator);
+  if (iAmCreator){
+    selectedInvitees = new Set(state.outingInvitees.filter(i=>i.outing_id===o.id).map(i=>i.user_id));
+    setVisibility(o.visibility || "public");
+  }
+
   document.getElementById("detail-modal").classList.add("hidden");
   modal.classList.remove("hidden");
 }
@@ -1909,6 +2003,10 @@ document.getElementById("outing-form").addEventListener("submit", async (e)=>{
     status = dateVal ? "planifiee" : "idee";
   }
 
+  const outingId = editingId || crypto.randomUUID();
+  const visibilityFieldVisible = !document.getElementById("o-visibility-field").classList.contains("hidden");
+  const visibility = document.getElementById("o-visibility").value;
+
   const payload = {
     title: document.getElementById("o-title").value.trim(),
     category: document.getElementById("o-category").value,
@@ -1920,18 +2018,36 @@ document.getElementById("outing-form").addEventListener("submit", async (e)=>{
     lat: modal.dataset.lat ? parseFloat(modal.dataset.lat) : null,
     lng: modal.dataset.lng ? parseFloat(modal.dataset.lng) : null,
     start_at: dateVal ? new Date(dateVal).toISOString() : null,
-    is_public: document.getElementById("o-is-public").checked,
     status
   };
+  if (visibilityFieldVisible) payload.visibility = visibility;
 
   let error;
   if (editingId){
     ({ error } = await sb.from("outings").update(payload).eq("id", editingId));
   } else {
+    payload.id = outingId;
     payload.created_by = state.user.id;
     ({ error } = await sb.from("outings").insert(payload));
   }
   if (error){ toast("Erreur : " + error.message); return; }
+
+  if (visibilityFieldVisible){
+    const previousInviteeIds = editingId
+      ? new Set(state.outingInvitees.filter(i=>i.outing_id===editingId).map(i=>i.user_id))
+      : new Set();
+    const desiredInviteeIds = visibility === "selection" ? selectedInvitees : new Set();
+    const toAdd = [...desiredInviteeIds].filter(id=>!previousInviteeIds.has(id));
+    const toRemove = [...previousInviteeIds].filter(id=>!desiredInviteeIds.has(id));
+    if (toAdd.length){
+      const { error: inviteError } = await sb.from("outing_invitees").insert(toAdd.map(user_id=>({ outing_id: outingId, user_id })));
+      if (inviteError) toast("Sortie enregistrée, mais erreur sur les invitations : " + inviteError.message);
+    }
+    for (const user_id of toRemove){
+      await sb.from("outing_invitees").delete().eq("outing_id", outingId).eq("user_id", user_id);
+    }
+  }
+
   modal.classList.add("hidden");
   state.editingOutingId = null;
   await loadAllData();
@@ -2030,7 +2146,7 @@ document.getElementById("d-plan-confirm").onclick = async ()=>{
 function renderDetailModal(){
   const o = state.outings.find(x=>x.id===state.currentOutingId);
   if (!o) return;
-  document.getElementById("d-title").textContent = (o.emoji ? o.emoji + " " : "") + o.title + (o.is_public === false ? " 🔒" : "");
+  document.getElementById("d-title").textContent = (o.emoji ? o.emoji + " " : "") + o.title + visibilityBadge(o);
   document.getElementById("d-plan-inline").classList.add("hidden");
 
   const statusLabel = { idee:"Idée", planifiee:"Planifiée", faite:"Faite" }[o.status];
@@ -2043,6 +2159,15 @@ function renderDetailModal(){
   document.getElementById("d-url").innerHTML = o.url ? `<a href="${escapeAttr(o.url)}" target="_blank" rel="noopener">${escapeHtml(o.url)}</a>` : "";
 
   buildDetailMenu(o);
+
+  const inviteesSection = document.getElementById("d-invitees-section");
+  if (o.visibility === "selection"){
+    inviteesSection.classList.remove("hidden");
+    const invitees = state.outingInvitees.filter(i=>i.outing_id===o.id);
+    document.getElementById("d-invitees").innerHTML = invitees.map(i=>`<img src="${avatarFor(i.user_id)}" alt="" title="${escapeAttr(nameFor(i.user_id))}" />`).join("") || `<span style="font-size:13px;color:var(--ink-soft)">Personne invitée pour l'instant</span>`;
+  } else {
+    inviteesSection.classList.add("hidden");
+  }
 
   const interested = state.interests.filter(i=>i.outing_id===o.id);
   const iAmIn = interested.some(i=>i.user_id===state.profile.id);
@@ -2375,6 +2500,11 @@ function escapeHtml(str){
   return String(str).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 }
 function escapeAttr(str){ return escapeHtml(str); }
+function visibilityBadge(o){
+  if (o.visibility === "prive") return " 🔒";
+  if (o.visibility === "selection") return " 👥";
+  return "";
+}
 
 /* ============================================================
    PWA : SERVICE WORKER
