@@ -1191,12 +1191,19 @@ function renderDetailModal(){
     const slots = state.pollSlots.filter(s=>s.outing_id===o.id).sort((a,b)=> new Date(a.starts_at)-new Date(b.starts_at));
     const slotsEl = document.getElementById("d-poll-slots");
     slotsEl.innerHTML = "";
+    const voteCounts = slots.map(s=> state.pollVotes.filter(v=>v.slot_id===s.id).length);
+    const maxVotes = Math.max(0, ...voteCounts);
     slots.forEach(s=>{
       const votes = state.pollVotes.filter(v=>v.slot_id===s.id);
       const mine = votes.some(v=>v.user_id===state.profile.id);
+      const isWinning = maxVotes > 0 && votes.length === maxVotes;
       const row = document.createElement("div");
       row.className = "slot-row";
-      row.innerHTML = `<span>${new Date(s.starts_at).toLocaleString("fr-FR",{dateStyle:"medium", timeStyle:"short"})} (${votes.length})</span>`;
+      row.innerHTML = `<span>${isWinning ? "🏆 " : ""}${new Date(s.starts_at).toLocaleString("fr-FR",{dateStyle:"medium", timeStyle:"short"})} (${votes.length})</span>`;
+
+      const actions = document.createElement("div");
+      actions.style.cssText = "display:flex;gap:6px";
+
       const btn = document.createElement("button");
       btn.className = "vote" + (mine ? " mine" : "");
       btn.textContent = mine ? "Je suis dispo ✓" : "Je suis dispo";
@@ -1205,7 +1212,20 @@ function renderDetailModal(){
         else await sb.from("poll_votes").insert({ slot_id: s.id, user_id: state.profile.id });
         await loadAllData(); renderDetailModal();
       };
-      row.appendChild(btn);
+
+      const pickBtn = document.createElement("button");
+      pickBtn.className = "vote";
+      pickBtn.textContent = "Retenir cette date";
+      pickBtn.onclick = async ()=>{
+        const { error } = await sb.from("outings").update({ start_at: s.starts_at, status: "planifiee" }).eq("id", o.id);
+        if (error){ toast("Erreur : " + error.message); return; }
+        await loadAllData(); renderDetailModal(); renderCurrentView();
+        toast("Date retenue pour la sortie.");
+      };
+
+      actions.appendChild(btn);
+      actions.appendChild(pickBtn);
+      row.appendChild(actions);
       slotsEl.appendChild(row);
     });
   } else {
