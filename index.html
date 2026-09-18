@@ -87,6 +87,15 @@
   .btn.danger{background:transparent;border-color:var(--danger);color:var(--danger)}
   .btn:disabled{opacity:.5;cursor:default}
   .link-btn{background:none;border:none;color:var(--moss-dark);text-decoration:underline;cursor:pointer;font-size:13px;padding:0}
+  .geocode-suggestions{
+    position:absolute;top:100%;left:0;right:0;
+    background:var(--white);border:1px solid var(--line);border-top:none;
+    max-height:220px;overflow-y:auto;z-index:20;border-radius:0 0 3px 3px;
+    box-shadow:0 4px 10px rgba(0,0,0,.08);
+  }
+  .geocode-suggestion-item{padding:8px 10px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--line)}
+  .geocode-suggestion-item:last-child{border-bottom:none}
+  .geocode-suggestion-item:hover{background:rgba(47,74,60,.08)}
   .pw-wrap{position:relative}
   .pw-wrap input{padding-right:40px}
   .pw-toggle{
@@ -355,10 +364,13 @@
       <div class="field"><label>Description (optionnel)</label><textarea id="o-desc" rows="2"></textarea></div>
       <div class="field"><label>Lien (optionnel)</label><input id="o-url" placeholder="https://" /></div>
       <div class="field">
-        <label>Adresse</label>
+        <label>Adresse ou lieu</label>
         <div style="display:flex;gap:8px">
-          <input id="o-address" placeholder="ex. 12 rue de Rivoli, Paris" style="flex:1" />
-          <button type="button" class="btn secondary" id="geocode-btn">Localiser</button>
+          <div style="flex:1;position:relative">
+            <input id="o-address" placeholder="ex. UGC Ciné Cité Châtelet" autocomplete="off" style="width:100%" />
+            <div id="geocode-suggestions" class="geocode-suggestions hidden"></div>
+          </div>
+          <button type="button" class="btn secondary" id="geocode-btn">Rechercher</button>
         </div>
         <p id="geocode-status" style="font-size:12px;color:var(--ink-soft);margin:6px 0 0"></p>
       </div>
@@ -816,6 +828,7 @@ document.getElementById("fab").onclick = ()=>{
   document.getElementById("outing-modal-title").textContent = "Proposer une sortie";
   document.getElementById("outing-form").reset();
   document.getElementById("geocode-status").textContent = "";
+  hideGeocodeSuggestions();
   document.getElementById("outing-modal").dataset.lat = "";
   document.getElementById("outing-modal").dataset.lng = "";
   document.getElementById("outing-modal").classList.remove("hidden");
@@ -838,6 +851,7 @@ function openEditModal(o){
   document.getElementById("o-url").value = o.url || "";
   document.getElementById("o-address").value = o.address || "";
   document.getElementById("geocode-status").textContent = "";
+  hideGeocodeSuggestions();
   modal.dataset.lat = (o.lat !== null && o.lat !== undefined) ? o.lat : "";
   modal.dataset.lng = (o.lng !== null && o.lng !== undefined) ? o.lng : "";
   document.getElementById("o-date").value = o.start_at ? toDatetimeLocal(o.start_at) : "";
@@ -848,22 +862,77 @@ document.querySelectorAll("[data-close]").forEach(btn=>{
   btn.addEventListener("click", (e)=> e.target.closest(".overlay").classList.add("hidden"));
 });
 
-document.getElementById("geocode-btn").onclick = async ()=>{
-  const address = document.getElementById("o-address").value.trim();
+let geocodeDebounceTimer = null;
+
+function hideGeocodeSuggestions(){
+  const box = document.getElementById("geocode-suggestions");
+  box.innerHTML = "";
+  box.classList.add("hidden");
+}
+
+function renderGeocodeSuggestions(results){
+  const box = document.getElementById("geocode-suggestions");
+  box.innerHTML = "";
+  results.forEach(r=>{
+    const item = document.createElement("div");
+    item.className = "geocode-suggestion-item";
+    item.textContent = r.display_name;
+    item.onclick = ()=>{
+      document.getElementById("o-address").value = r.display_name;
+      const modal = document.getElementById("outing-modal");
+      modal.dataset.lat = r.lat;
+      modal.dataset.lng = r.lon;
+      document.getElementById("geocode-status").textContent = "Localise : " + r.display_name;
+      hideGeocodeSuggestions();
+    };
+    box.appendChild(item);
+  });
+  box.classList.remove("hidden");
+}
+
+async function searchAddressSuggestions(query){
   const statusEl = document.getElementById("geocode-status");
-  if (!address){ statusEl.textContent = "Renseigne une adresse d'abord."; return; }
   statusEl.textContent = "Recherche en cours...";
   try{
-    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(address + ", Paris")}`);
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=5&q=${encodeURIComponent(query + ", Paris")}`);
     const results = await res.json();
-    if (results.length===0){ statusEl.textContent = "Adresse introuvable, essaie une formulation differente."; return; }
-    document.getElementById("outing-modal").dataset.lat = results[0].lat;
-    document.getElementById("outing-modal").dataset.lng = results[0].lon;
-    statusEl.textContent = "Localise : " + results[0].display_name;
+    if (results.length===0){
+      statusEl.textContent = "Aucun lieu trouve, essaie une formulation differente.";
+      hideGeocodeSuggestions();
+      return;
+    }
+    statusEl.textContent = "";
+    renderGeocodeSuggestions(results);
   } catch(err){
-    statusEl.textContent = "Erreur de geocodage.";
+    statusEl.textContent = "Erreur de recherche.";
+    hideGeocodeSuggestions();
   }
+}
+
+document.getElementById("o-address").addEventListener("input", ()=>{
+  clearTimeout(geocodeDebounceTimer);
+  const modal = document.getElementById("outing-modal");
+  modal.dataset.lat = "";
+  modal.dataset.lng = "";
+  document.getElementById("geocode-status").textContent = "";
+  const q = document.getElementById("o-address").value.trim();
+  if (q.length < 3){ hideGeocodeSuggestions(); return; }
+  geocodeDebounceTimer = setTimeout(()=> searchAddressSuggestions(q), 400);
+});
+
+document.getElementById("geocode-btn").onclick = ()=>{
+  const address = document.getElementById("o-address").value.trim();
+  const statusEl = document.getElementById("geocode-status");
+  if (!address){ statusEl.textContent = "Renseigne une adresse ou un lieu d'abord."; return; }
+  clearTimeout(geocodeDebounceTimer);
+  searchAddressSuggestions(address);
 };
+
+document.addEventListener("click", (e)=>{
+  if (!e.target.closest("#o-address") && !e.target.closest("#geocode-suggestions")){
+    hideGeocodeSuggestions();
+  }
+});
 
 document.getElementById("outing-form").addEventListener("submit", async (e)=>{
   e.preventDefault();
