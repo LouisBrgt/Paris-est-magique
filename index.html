@@ -474,7 +474,17 @@
 
     <hr class="divider" />
     <button class="btn secondary" id="d-edit-btn" style="margin-right:8px">Modifier la sortie</button>
-    <button class="btn danger" id="d-delete-btn">Supprimer la sortie</button>
+    <button class="btn danger" id="d-delete-btn">Archiver la sortie</button>
+  </div>
+</div>
+
+<!-- ================= MODALE : corbeille ================= -->
+<div id="trash-modal" class="overlay hidden">
+  <div class="modal">
+    <button class="modal-close" data-close>&times;</button>
+    <h2>Corbeille</h2>
+    <p style="font-size:12px;color:var(--ink-soft);margin:0 0 14px">Sorties archivées il y a moins de 30 jours.</p>
+    <div id="trash-list"></div>
   </div>
 </div>
 
@@ -591,6 +601,43 @@ document.getElementById("logout-btn").onclick = async ()=>{
   await sb.auth.signOut();
   location.reload();
 };
+
+document.getElementById("trash-btn").onclick = ()=>{
+  renderTrash();
+  document.getElementById("trash-modal").classList.remove("hidden");
+};
+
+function renderTrash(){
+  const THIRTY_DAYS_MS = 30*24*60*60*1000;
+  const now = Date.now();
+  const archived = state.outings
+    .filter(o=> o.archived_at && (now - new Date(o.archived_at).getTime()) <= THIRTY_DAYS_MS)
+    .sort((a,b)=> new Date(b.archived_at) - new Date(a.archived_at));
+  const list = document.getElementById("trash-list");
+  list.innerHTML = "";
+  if (archived.length === 0){
+    list.innerHTML = `<p style="font-size:13px;color:var(--ink-soft)">La corbeille est vide.</p>`;
+    return;
+  }
+  archived.forEach(o=>{
+    const row = document.createElement("div");
+    row.className = "slot-row";
+    const label = document.createElement("span");
+    label.textContent = `${o.emoji ? o.emoji + " " : ""}${o.title} (archivée le ${new Date(o.archived_at).toLocaleDateString("fr-FR")})`;
+    const btn = document.createElement("button");
+    btn.className = "vote";
+    btn.textContent = "Restaurer";
+    btn.onclick = async ()=>{
+      const { error } = await sb.from("outings").update({ archived_at: null }).eq("id", o.id);
+      if (error){ toast("Erreur : " + error.message); return; }
+      await loadAllData(); renderTrash(); renderCurrentView();
+      toast("Sortie restaurée.");
+    };
+    row.appendChild(label);
+    row.appendChild(btn);
+    list.appendChild(row);
+  });
+}
 
 sb.auth.onAuthStateChange((_event, session)=>{
   if (session && session.user){
@@ -774,7 +821,7 @@ function renderNextOutingBanner(){
   const banner = document.getElementById("next-outing-banner");
   const now = new Date();
   const upcoming = state.outings
-    .filter(o=> o.status === "planifiee" && o.start_at && new Date(o.start_at) >= now)
+    .filter(o=> !o.archived_at && o.status === "planifiee" && o.start_at && new Date(o.start_at) >= now)
     .sort((a,b)=> new Date(a.start_at) - new Date(b.start_at));
   const next = upcoming[0];
   if (!next){
@@ -805,6 +852,7 @@ function filteredOutings(){
   const budget = document.getElementById("budget-filter").value;
   const showDone = document.getElementById("show-done").checked;
   return state.outings.filter(o=>{
+    if (o.archived_at) return false;
     if (!cats.includes(o.category)) return false;
     if (budget && String(o.budget) !== budget) return false;
     if (o.status === "faite" && !showDone) return false;
@@ -1327,11 +1375,12 @@ function renderDetailModal(){
   document.getElementById("d-edit-btn").onclick = ()=> openEditModal(o);
 
   document.getElementById("d-delete-btn").onclick = async ()=>{
-    if (!confirm("Supprimer definitivement cette sortie ?")) return;
-    await sb.from("outings").delete().eq("id", o.id);
+    if (!confirm("Archiver cette sortie ? Tu pourras la restaurer depuis la corbeille pendant 30 jours.")) return;
+    const { error } = await sb.from("outings").update({ archived_at: new Date().toISOString() }).eq("id", o.id);
+    if (error){ toast("Erreur : " + error.message); return; }
     document.getElementById("detail-modal").classList.add("hidden");
     await loadAllData(); renderCurrentView();
-    toast("Sortie supprimee.");
+    toast("Sortie archivée.");
   };
 }
 
