@@ -1,0 +1,956 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Sorties</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,500;0,600;1,500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+  :root{
+    --paper:#F3EEE3;
+    --ink:#24211D;
+    --ink-soft:#5B564C;
+    --moss:#2F4A3C;
+    --moss-dark:#1F3329;
+    --ochre:#C97F2D;
+    --line:#DCD2B8;
+    --white:#FFFDF8;
+    --danger:#A6402F;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'Inter',sans-serif;
+    font-size:15px;
+    line-height:1.5;
+    min-height:100vh;
+  }
+  h1,h2,h3,.display{font-family:'Fraunces',serif}
+  a{color:inherit}
+  button{font-family:inherit}
+  .hidden{display:none !important}
+
+  /* ---- ecran d'authentification ---- */
+  #auth-screen{
+    min-height:100vh;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:24px;
+  }
+  .auth-box{
+    width:100%;
+    max-width:380px;
+  }
+  .wordmark{
+    font-size:34px;
+    font-style:italic;
+    font-weight:500;
+    margin:0 0 6px;
+    color:var(--moss-dark);
+  }
+  .auth-sub{color:var(--ink-soft);margin:0 0 32px;font-size:14px}
+  .field{margin-bottom:14px}
+  .field label{display:block;font-size:13px;color:var(--ink-soft);margin-bottom:5px}
+  .field input, .field select, .field textarea{
+    width:100%;
+    border:1px solid var(--line);
+    background:var(--white);
+    padding:10px 12px;
+    border-radius:3px;
+    font-size:15px;
+    color:var(--ink);
+    font-family:inherit;
+  }
+  .field input:focus, .field select:focus, .field textarea:focus{
+    outline:none;border-color:var(--moss);
+  }
+  .btn{
+    display:inline-block;
+    border:1px solid var(--moss-dark);
+    background:var(--moss-dark);
+    color:var(--white);
+    padding:10px 18px;
+    border-radius:3px;
+    font-size:14px;
+    font-weight:500;
+    cursor:pointer;
+  }
+  .btn:hover{background:var(--moss)}
+  .btn.secondary{background:transparent;color:var(--moss-dark)}
+  .btn.secondary:hover{background:rgba(47,74,60,.08)}
+  .btn.ghost{border-color:var(--line);background:transparent;color:var(--ink)}
+  .btn.danger{background:transparent;border-color:var(--danger);color:var(--danger)}
+  .btn:disabled{opacity:.5;cursor:default}
+  .link-btn{background:none;border:none;color:var(--moss-dark);text-decoration:underline;cursor:pointer;font-size:13px;padding:0}
+  .error-text{color:var(--danger);font-size:13px;margin:8px 0 0}
+  .switch-mode{margin-top:20px;font-size:13px;color:var(--ink-soft)}
+
+  /* ---- creation de profil ---- */
+  #profile-screen{
+    min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;
+  }
+  .avatar-picker{
+    width:88px;height:88px;border-radius:50%;
+    background:var(--white);border:1px solid var(--line);
+    display:flex;align-items:center;justify-content:center;
+    overflow:hidden;cursor:pointer;margin-bottom:16px;color:var(--ink-soft);font-size:12px;text-align:center;
+  }
+  .avatar-picker img{width:100%;height:100%;object-fit:cover}
+
+  /* ---- app ---- */
+  #app{max-width:1080px;margin:0 auto;padding:20px 20px 80px}
+  header.top{
+    display:flex;align-items:baseline;justify-content:space-between;
+    padding-bottom:14px;border-bottom:1px solid var(--line);margin-bottom:18px;flex-wrap:wrap;gap:10px;
+  }
+  header.top .wordmark{font-size:24px;margin:0}
+  .who{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--ink-soft)}
+  .who img{width:28px;height:28px;border-radius:50%;object-fit:cover;border:1px solid var(--line)}
+  .who button{background:none;border:none;color:var(--ink-soft);text-decoration:underline;cursor:pointer;font-size:13px}
+
+  nav.tabs{display:flex;gap:22px;margin-bottom:18px}
+  nav.tabs button{
+    background:none;border:none;padding:6px 0;font-size:15px;color:var(--ink-soft);
+    cursor:pointer;border-bottom:2px solid transparent;
+  }
+  nav.tabs button.active{color:var(--ink);border-color:var(--ochre);font-weight:600}
+
+  .toolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:12px}
+  .filters{display:flex;gap:14px;flex-wrap:wrap;align-items:center;font-size:13px}
+  .filters select{border:1px solid var(--line);background:var(--white);padding:6px 8px;border-radius:3px;font-size:13px}
+  .cat-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
+
+  /* ---- calendrier ---- */
+  #view-calendar{display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap}
+  .cal-main{flex:1;min-width:300px}
+  .cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+  .cal-head .month-label{font-family:'Fraunces',serif;font-size:19px}
+  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);border-top:1px solid var(--line);border-left:1px solid var(--line)}
+  .cal-dow{font-size:11px;color:var(--ink-soft);text-align:center;padding:6px 0;border-right:1px solid var(--line);border-bottom:1px solid var(--line);background:rgba(255,255,255,.4)}
+  .cal-cell{
+    min-height:88px;border-right:1px solid var(--line);border-bottom:1px solid var(--line);
+    padding:5px;font-size:12px;background:var(--white);
+  }
+  .cal-cell.out-month{background:transparent;color:#B9B2A0}
+  .cal-cell .daynum{font-size:12px;color:var(--ink-soft);margin-bottom:4px}
+  .cal-cell.today .daynum{color:var(--ochre);font-weight:600}
+  .cal-chip{
+    font-size:11px;padding:2px 5px;border-radius:2px;margin-bottom:3px;cursor:pointer;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--white);
+  }
+  .ideas-side{width:250px;border-left:1px solid var(--line);padding-left:20px}
+  .ideas-side h3{font-size:14px;margin:0 0 10px;color:var(--ink-soft);font-weight:600;font-family:'Inter',sans-serif}
+  .idea-card{
+    border:1px solid var(--line);background:var(--white);border-radius:3px;padding:10px;margin-bottom:10px;cursor:pointer;
+  }
+  .idea-card .t{font-weight:600;font-size:13px;margin-bottom:3px}
+  .idea-card .meta{font-size:11px;color:var(--ink-soft)}
+
+  /* ---- carte ---- */
+  #map{height:520px;border:1px solid var(--line);border-radius:3px}
+
+  /* ---- modales ---- */
+  .overlay{
+    position:fixed;inset:0;background:rgba(36,33,29,.45);
+    display:flex;align-items:center;justify-content:center;padding:20px;z-index:50;
+  }
+  .modal{
+    background:var(--paper);border:1px solid var(--line);border-radius:4px;
+    max-width:480px;width:100%;max-height:88vh;overflow-y:auto;padding:24px;
+  }
+  .modal h2{margin:0 0 16px;font-size:20px}
+  .modal-close{float:right;background:none;border:none;font-size:20px;cursor:pointer;color:var(--ink-soft)}
+  .row2{display:flex;gap:10px}
+  .row2 .field{flex:1}
+  .divider{border:none;border-top:1px solid var(--line);margin:18px 0}
+
+  .detail-meta{font-size:13px;color:var(--ink-soft);margin-bottom:14px}
+  .status-badge{display:inline-block;font-size:11px;padding:2px 8px;border-radius:10px;border:1px solid var(--line);margin-right:6px}
+  .avatars-row{display:flex;gap:-4px}
+  .avatars-row img{width:26px;height:26px;border-radius:50%;object-fit:cover;border:2px solid var(--paper);margin-left:-8px}
+  .avatars-row img:first-child{margin-left:0}
+
+  .slot-row{display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line);font-size:13px}
+  .slot-row button.vote{border:1px solid var(--line);background:var(--white);border-radius:3px;padding:4px 10px;cursor:pointer;font-size:12px}
+  .slot-row button.vote.mine{background:var(--moss-dark);border-color:var(--moss-dark);color:var(--white)}
+
+  .toast{
+    position:fixed;bottom:18px;left:50%;transform:translateX(-50%);
+    background:var(--ink);color:var(--white);padding:10px 18px;border-radius:4px;font-size:13px;z-index:100;
+  }
+  #fab{
+    position:fixed;bottom:24px;right:24px;
+    background:var(--ochre);color:var(--white);border:none;border-radius:50%;
+    width:52px;height:52px;font-size:26px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.25);
+  }
+  @media (max-width:720px){
+    .ideas-side{width:100%;border-left:none;border-top:1px solid var(--line);padding-left:0;padding-top:16px}
+    .cal-cell{min-height:60px}
+  }
+</style>
+</head>
+<body>
+
+<!-- ================= AUTH ================= -->
+<div id="auth-screen">
+  <div class="auth-box">
+    <p class="wordmark">Sorties</p>
+    <p class="auth-sub">Le site du groupe pour organiser les prochaines sorties.</p>
+
+    <form id="login-form">
+      <div class="field">
+        <label>Adresse e-mail</label>
+        <input type="email" id="login-email" required autocomplete="email" />
+      </div>
+      <div class="field">
+        <label>Mot de passe</label>
+        <input type="password" id="login-password" required autocomplete="current-password" />
+      </div>
+      <button class="btn" type="submit">Se connecter</button>
+      <p class="error-text hidden" id="login-error"></p>
+    </form>
+
+    <form id="signup-form" class="hidden">
+      <div class="field">
+        <label>Adresse e-mail</label>
+        <input type="email" id="signup-email" required autocomplete="email" />
+      </div>
+      <div class="field">
+        <label>Mot de passe (6 caracteres minimum)</label>
+        <input type="password" id="signup-password" required minlength="6" autocomplete="new-password" />
+      </div>
+      <button class="btn" type="submit">Creer mon compte</button>
+      <p class="error-text hidden" id="signup-error"></p>
+    </form>
+
+    <p class="switch-mode">
+      <span id="to-signup">Pas encore de compte ? <button type="button" class="link-btn" id="show-signup">En creer un</button></span>
+      <span id="to-login" class="hidden">Deja inscrit ? <button type="button" class="link-btn" id="show-login">Se connecter</button></span>
+    </p>
+  </div>
+</div>
+
+<!-- ================= CREATION PROFIL ================= -->
+<div id="profile-screen" class="hidden">
+  <div class="auth-box">
+    <h2 style="margin:0 0 6px">Ton profil</h2>
+    <p class="auth-sub">Une photo et ton nom, pour que le groupe te reconnaisse.</p>
+    <input type="file" id="avatar-input" accept="image/*" class="hidden" />
+    <div class="avatar-picker" id="avatar-picker">Ajouter<br/>une photo</div>
+    <div class="row2">
+      <div class="field"><label>Prenom</label><input id="profile-first" required /></div>
+      <div class="field"><label>Nom</label><input id="profile-last" required /></div>
+    </div>
+    <button class="btn" id="save-profile-btn">Valider</button>
+    <p class="error-text hidden" id="profile-error"></p>
+  </div>
+</div>
+
+<!-- ================= APP ================= -->
+<div id="app" class="hidden">
+  <header class="top">
+    <p class="wordmark">Sorties</p>
+    <div class="who">
+      <img id="me-avatar" src="" />
+      <span id="me-name"></span>
+      <button id="logout-btn">Se deconnecter</button>
+    </div>
+  </header>
+
+  <nav class="tabs">
+    <button id="tab-cal" class="active">Calendrier</button>
+    <button id="tab-map">Plan</button>
+  </nav>
+
+  <div class="toolbar">
+    <div class="filters">
+      <label><input type="checkbox" class="cat-filter" value="resto" checked /> Restos</label>
+      <label><input type="checkbox" class="cat-filter" value="bar" checked /> Bars</label>
+      <label><input type="checkbox" class="cat-filter" value="expo" checked /> Expos</label>
+      <label><input type="checkbox" class="cat-filter" value="concert" checked /> Concerts</label>
+      <label><input type="checkbox" class="cat-filter" value="balade" checked /> Balades</label>
+      <label><input type="checkbox" class="cat-filter" value="autre" checked /> Autre</label>
+      <select id="budget-filter">
+        <option value="">Tout budget</option>
+        <option value="1">€</option>
+        <option value="2">€€</option>
+        <option value="3">€€€</option>
+      </select>
+      <label><input type="checkbox" id="show-done" /> Afficher les sorties faites</label>
+    </div>
+  </div>
+
+  <div id="view-calendar">
+    <div class="cal-main">
+      <div class="cal-head">
+        <button class="btn ghost" id="prev-month">&larr;</button>
+        <span class="month-label" id="month-label"></span>
+        <button class="btn ghost" id="next-month">&rarr;</button>
+      </div>
+      <div class="cal-grid" id="cal-grid"></div>
+    </div>
+    <div class="ideas-side">
+      <h3>Idees sans date</h3>
+      <div id="ideas-list"></div>
+    </div>
+  </div>
+
+  <div id="view-map" class="hidden">
+    <div id="map"></div>
+  </div>
+</div>
+
+<button id="fab" class="hidden">+</button>
+
+<!-- ================= MODALE : nouvelle sortie ================= -->
+<div id="outing-modal" class="overlay hidden">
+  <div class="modal">
+    <button class="modal-close" data-close>&times;</button>
+    <h2>Proposer une sortie</h2>
+    <form id="outing-form">
+      <div class="field"><label>Titre</label><input id="o-title" required /></div>
+      <div class="row2">
+        <div class="field">
+          <label>Categorie</label>
+          <select id="o-category">
+            <option value="resto">Resto</option>
+            <option value="bar">Bar</option>
+            <option value="expo">Expo</option>
+            <option value="concert">Concert</option>
+            <option value="balade">Balade</option>
+            <option value="autre">Autre</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Budget</label>
+          <select id="o-budget">
+            <option value="">-</option>
+            <option value="1">€</option>
+            <option value="2">€€</option>
+            <option value="3">€€€</option>
+          </select>
+        </div>
+      </div>
+      <div class="field"><label>Description (optionnel)</label><textarea id="o-desc" rows="2"></textarea></div>
+      <div class="field"><label>Lien (optionnel)</label><input id="o-url" placeholder="https://" /></div>
+      <div class="field">
+        <label>Adresse</label>
+        <div style="display:flex;gap:8px">
+          <input id="o-address" placeholder="ex. 12 rue de Rivoli, Paris" style="flex:1" />
+          <button type="button" class="btn secondary" id="geocode-btn">Localiser</button>
+        </div>
+        <p id="geocode-status" style="font-size:12px;color:var(--ink-soft);margin:6px 0 0"></p>
+      </div>
+      <div class="field">
+        <label>Date (optionnel, sinon reste une idee)</label>
+        <input type="datetime-local" id="o-date" />
+      </div>
+      <hr class="divider" />
+      <button class="btn" type="submit">Enregistrer</button>
+    </form>
+  </div>
+</div>
+
+<!-- ================= MODALE : detail sortie ================= -->
+<div id="detail-modal" class="overlay hidden">
+  <div class="modal">
+    <button class="modal-close" data-close>&times;</button>
+    <h2 id="d-title"></h2>
+    <div class="detail-meta" id="d-meta"></div>
+    <p id="d-desc"></p>
+    <p id="d-url"></p>
+
+    <div id="d-idea-actions"></div>
+
+    <hr class="divider" />
+    <h3 style="font-size:14px;margin:0 0 8px">Interesses</h3>
+    <div class="avatars-row" id="d-interests"></div>
+    <button class="btn secondary" id="d-interest-btn" style="margin-top:10px">Je suis chaud</button>
+
+    <div id="d-poll-section" class="hidden">
+      <hr class="divider" />
+      <h3 style="font-size:14px;margin:0 0 8px">Sondage de dispos</h3>
+      <div id="d-poll-slots"></div>
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <input type="datetime-local" id="d-new-slot" style="flex:1" />
+        <button class="btn secondary" id="d-add-slot">Ajouter</button>
+      </div>
+    </div>
+
+    <div id="d-review-section" class="hidden">
+      <hr class="divider" />
+      <h3 style="font-size:14px;margin:0 0 8px">Avis</h3>
+      <div id="d-reviews"></div>
+      <div class="field"><label>Note</label>
+        <select id="d-rating"><option value="5">5</option><option value="4">4</option><option value="3">3</option><option value="2">2</option><option value="1">1</option></select>
+      </div>
+      <div class="field"><label>Commentaire</label><textarea id="d-comment" rows="2"></textarea></div>
+      <button class="btn secondary" id="d-save-review">Enregistrer mon avis</button>
+    </div>
+
+    <hr class="divider" />
+    <button class="btn danger" id="d-delete-btn">Supprimer la sortie</button>
+  </div>
+</div>
+
+<div id="toast" class="toast hidden"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+<script>
+/* ============================================================
+   CONFIGURATION
+   ============================================================ */
+const SUPABASE_URL = "https://pzaikyfeoqtvsojcsdut.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_51N8RnRUMH82ysK20eRiJw_kPonjEn4";
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const CATEGORY_COLORS = {
+  resto:   "#C97F2D",
+  bar:     "#2F4A3C",
+  expo:    "#7A4A6B",
+  concert: "#A6402F",
+  balade:  "#3D6E8C",
+  autre:   "#807A68"
+};
+const DOW = ["Lu","Ma","Me","Je","Ve","Sa","Di"];
+const MONTHS = ["Janvier","Fevrier","Mars","Avril","Mai","Juin","Juillet","Aout","Septembre","Octobre","Novembre","Decembre"];
+
+/* ============================================================
+   ETAT GLOBAL
+   ============================================================ */
+let state = {
+  user: null,
+  profile: null,
+  profiles: {},     // id -> profile
+  avatarUrls: {},    // id -> signed url
+  outings: [],
+  interests: [],     // {outing_id, user_id}
+  pollSlots: [],
+  pollVotes: [],
+  reviews: [],
+  view: "calendar",
+  calMonth: new Date().getMonth(),
+  calYear: new Date().getFullYear(),
+  currentOutingId: null,
+  map: null,
+  markers: []
+};
+
+function toast(msg){
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.remove("hidden");
+  setTimeout(()=>t.classList.add("hidden"), 2600);
+}
+
+/* ============================================================
+   AUTHENTIFICATION
+   ============================================================ */
+document.getElementById("show-signup").onclick = () => {
+  document.getElementById("login-form").classList.add("hidden");
+  document.getElementById("signup-form").classList.remove("hidden");
+  document.getElementById("to-signup").classList.add("hidden");
+  document.getElementById("to-login").classList.remove("hidden");
+};
+document.getElementById("show-login").onclick = () => {
+  document.getElementById("signup-form").classList.add("hidden");
+  document.getElementById("login-form").classList.remove("hidden");
+  document.getElementById("to-login").classList.add("hidden");
+  document.getElementById("to-signup").classList.remove("hidden");
+};
+
+document.getElementById("login-form").addEventListener("submit", async (e)=>{
+  e.preventDefault();
+  const email = document.getElementById("login-email").value.trim();
+  const password = document.getElementById("login-password").value;
+  const errEl = document.getElementById("login-error");
+  errEl.classList.add("hidden");
+  const { error } = await sb.auth.signInWithPassword({ email, password });
+  if (error){ errEl.textContent = "Connexion impossible : " + error.message; errEl.classList.remove("hidden"); }
+});
+
+document.getElementById("signup-form").addEventListener("submit", async (e)=>{
+  e.preventDefault();
+  const email = document.getElementById("signup-email").value.trim();
+  const password = document.getElementById("signup-password").value;
+  const errEl = document.getElementById("signup-error");
+  errEl.classList.add("hidden");
+  const { error } = await sb.auth.signUp({ email, password });
+  if (error){ errEl.textContent = "Inscription impossible : " + error.message; errEl.classList.remove("hidden"); return; }
+  toast("Compte cree. Tu es connecte.");
+});
+
+document.getElementById("logout-btn").onclick = async ()=>{
+  await sb.auth.signOut();
+  location.reload();
+};
+
+sb.auth.onAuthStateChange((_event, session)=>{
+  if (session && session.user){
+    state.user = session.user;
+    boot();
+  } else {
+    state.user = null;
+    document.getElementById("auth-screen").classList.remove("hidden");
+    document.getElementById("profile-screen").classList.add("hidden");
+    document.getElementById("app").classList.add("hidden");
+    document.getElementById("fab").classList.add("hidden");
+  }
+});
+
+/* ============================================================
+   PROFIL
+   ============================================================ */
+let pendingAvatarFile = null;
+
+document.getElementById("avatar-picker").onclick = ()=> document.getElementById("avatar-input").click();
+document.getElementById("avatar-input").onchange = (e)=>{
+  const file = e.target.files[0];
+  if (!file) return;
+  pendingAvatarFile = file;
+  const reader = new FileReader();
+  reader.onload = ()=>{
+    document.getElementById("avatar-picker").innerHTML = `<img src="${reader.result}" />`;
+  };
+  reader.readAsDataURL(file);
+};
+
+document.getElementById("save-profile-btn").onclick = async ()=>{
+  const first = document.getElementById("profile-first").value.trim();
+  const last = document.getElementById("profile-last").value.trim();
+  const errEl = document.getElementById("profile-error");
+  errEl.classList.add("hidden");
+  if (!first || !last){ errEl.textContent = "Prenom et nom sont requis."; errEl.classList.remove("hidden"); return; }
+
+  let avatarPath = null;
+  if (pendingAvatarFile){
+    const path = `${state.user.id}/avatar.jpg`;
+    const { error: upErr } = await sb.storage.from("avatars").upload(path, pendingAvatarFile, { upsert: true, contentType: pendingAvatarFile.type });
+    if (upErr){ errEl.textContent = "Erreur photo : " + upErr.message; errEl.classList.remove("hidden"); return; }
+    avatarPath = path;
+  }
+
+  const { error } = await sb.from("profiles").insert({
+    id: state.user.id, first_name: first, last_name: last, avatar_path: avatarPath
+  });
+  if (error){ errEl.textContent = "Erreur : " + error.message; errEl.classList.remove("hidden"); return; }
+  await boot();
+};
+
+/* ============================================================
+   DEMARRAGE APRES CONNEXION
+   ============================================================ */
+async function boot(){
+  const { data: profile } = await sb.from("profiles").select("*").eq("id", state.user.id).maybeSingle();
+  if (!profile){
+    document.getElementById("auth-screen").classList.add("hidden");
+    document.getElementById("profile-screen").classList.remove("hidden");
+    return;
+  }
+  state.profile = profile;
+  document.getElementById("auth-screen").classList.add("hidden");
+  document.getElementById("profile-screen").classList.add("hidden");
+  document.getElementById("app").classList.remove("hidden");
+  document.getElementById("fab").classList.remove("hidden");
+
+  await loadAllData();
+  renderMe();
+  renderCalendar();
+  subscribeRealtime();
+}
+
+async function loadAllData(){
+  const [{data: profiles}, {data: outings}, {data: interests}, {data: slots}, {data: votes}, {data: reviews}] = await Promise.all([
+    sb.from("profiles").select("*"),
+    sb.from("outings").select("*").order("start_at", { ascending: true }),
+    sb.from("interests").select("*"),
+    sb.from("poll_slots").select("*"),
+    sb.from("poll_votes").select("*"),
+    sb.from("reviews").select("*")
+  ]);
+  state.profiles = {};
+  (profiles||[]).forEach(p => state.profiles[p.id] = p);
+  state.outings = outings || [];
+  state.interests = interests || [];
+  state.pollSlots = slots || [];
+  state.pollVotes = votes || [];
+  state.reviews = reviews || [];
+  await preloadAvatars();
+}
+
+async function preloadAvatars(){
+  const paths = Object.values(state.profiles).filter(p=>p.avatar_path).map(p=>p.avatar_path);
+  for (const path of paths){
+    if (state.avatarUrls[path]) continue;
+    const { data } = await sb.storage.from("avatars").createSignedUrl(path, 3600);
+    if (data) state.avatarUrls[path] = data.signedUrl;
+  }
+}
+function avatarFor(userId){
+  const p = state.profiles[userId];
+  if (!p) return "";
+  if (p.avatar_path && state.avatarUrls[p.avatar_path]) return state.avatarUrls[p.avatar_path];
+  return "https://api.dicebear.com/7.x/initials/svg?seed=" + encodeURIComponent((p.first_name||"?")[0] + (p.last_name||"?")[0]);
+}
+function nameFor(userId){
+  const p = state.profiles[userId];
+  return p ? `${p.first_name} ${p.last_name}` : "quelqu'un";
+}
+
+function renderMe(){
+  document.getElementById("me-avatar").src = avatarFor(state.profile.id);
+  document.getElementById("me-name").textContent = state.profile.first_name;
+}
+
+function subscribeRealtime(){
+  sb.channel("public-changes")
+    .on("postgres_changes", { event: "*", schema: "public" }, async ()=>{
+      await loadAllData();
+      renderCurrentView();
+    })
+    .subscribe();
+}
+
+/* ============================================================
+   NAVIGATION / FILTRES
+   ============================================================ */
+document.getElementById("tab-cal").onclick = ()=>{ state.view="calendar"; renderCurrentView(); };
+document.getElementById("tab-map").onclick = ()=>{ state.view="map"; renderCurrentView(); };
+
+document.querySelectorAll(".cat-filter").forEach(cb => cb.addEventListener("change", renderCurrentView));
+document.getElementById("budget-filter").addEventListener("change", renderCurrentView);
+document.getElementById("show-done").addEventListener("change", renderCurrentView);
+
+function renderCurrentView(){
+  document.getElementById("tab-cal").classList.toggle("active", state.view==="calendar");
+  document.getElementById("tab-map").classList.toggle("active", state.view==="map");
+  document.getElementById("view-calendar").classList.toggle("hidden", state.view!=="calendar");
+  document.getElementById("view-map").classList.toggle("hidden", state.view!=="map");
+  if (state.view==="calendar") renderCalendar();
+  else renderMap();
+}
+
+function activeCategories(){
+  return Array.from(document.querySelectorAll(".cat-filter:checked")).map(cb=>cb.value);
+}
+function filteredOutings(){
+  const cats = activeCategories();
+  const budget = document.getElementById("budget-filter").value;
+  const showDone = document.getElementById("show-done").checked;
+  return state.outings.filter(o=>{
+    if (!cats.includes(o.category)) return false;
+    if (budget && String(o.budget) !== budget) return false;
+    if (o.status === "faite" && !showDone) return false;
+    return true;
+  });
+}
+
+/* ============================================================
+   VUE CALENDRIER
+   ============================================================ */
+document.getElementById("prev-month").onclick = ()=>{
+  state.calMonth--; if (state.calMonth<0){ state.calMonth=11; state.calYear--; }
+  renderCalendar();
+};
+document.getElementById("next-month").onclick = ()=>{
+  state.calMonth++; if (state.calMonth>11){ state.calMonth=0; state.calYear++; }
+  renderCalendar();
+};
+
+function renderCalendar(){
+  document.getElementById("month-label").textContent = `${MONTHS[state.calMonth]} ${state.calYear}`;
+  const grid = document.getElementById("cal-grid");
+  grid.innerHTML = "";
+  DOW.forEach(d=>{
+    const el = document.createElement("div");
+    el.className = "cal-dow"; el.textContent = d;
+    grid.appendChild(el);
+  });
+
+  const first = new Date(state.calYear, state.calMonth, 1);
+  const startOffset = (first.getDay()+6)%7; // lundi = 0
+  const daysInMonth = new Date(state.calYear, state.calMonth+1, 0).getDate();
+  const totalCells = Math.ceil((startOffset+daysInMonth)/7)*7;
+
+  const outings = filteredOutings().filter(o=>o.start_at);
+  const today = new Date();
+
+  for (let i=0;i<totalCells;i++){
+    const dayNum = i - startOffset + 1;
+    const cell = document.createElement("div");
+    cell.className = "cal-cell";
+    let cellDate = null;
+    if (dayNum<1 || dayNum>daysInMonth){
+      cell.classList.add("out-month");
+    } else {
+      cellDate = new Date(state.calYear, state.calMonth, dayNum);
+      const dn = document.createElement("div");
+      dn.className = "daynum";
+      dn.textContent = dayNum;
+      if (cellDate.toDateString() === today.toDateString()) cell.classList.add("today");
+      cell.appendChild(dn);
+
+      outings.filter(o=>{
+        const d = new Date(o.start_at);
+        return d.getFullYear()===cellDate.getFullYear() && d.getMonth()===cellDate.getMonth() && d.getDate()===cellDate.getDate();
+      }).forEach(o=>{
+        const chip = document.createElement("div");
+        chip.className = "cal-chip";
+        chip.style.background = CATEGORY_COLORS[o.category] || "#888";
+        chip.textContent = o.title;
+        chip.onclick = ()=> openDetail(o.id);
+        cell.appendChild(chip);
+      });
+    }
+    grid.appendChild(cell);
+  }
+
+  const ideasList = document.getElementById("ideas-list");
+  ideasList.innerHTML = "";
+  const ideas = filteredOutings().filter(o=>!o.start_at && o.status==="idee");
+  if (ideas.length===0){
+    ideasList.innerHTML = `<p style="font-size:13px;color:var(--ink-soft)">Aucune idee pour l'instant.</p>`;
+  }
+  ideas.forEach(o=>{
+    const card = document.createElement("div");
+    card.className = "idea-card";
+    card.innerHTML = `<div class="t">${escapeHtml(o.title)}</div><div class="meta">${o.category} - proposee par ${nameFor(o.created_by)}</div>`;
+    card.onclick = ()=> openDetail(o.id);
+    ideasList.appendChild(card);
+  });
+}
+
+/* ============================================================
+   VUE CARTE
+   ============================================================ */
+function ensureMap(){
+  if (state.map) return;
+  state.map = L.map("map").setView([48.8566, 2.3522], 12);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: "&copy; OpenStreetMap"
+  }).addTo(state.map);
+}
+function renderMap(){
+  ensureMap();
+  setTimeout(()=> state.map.invalidateSize(), 50);
+  state.markers.forEach(m => state.map.removeLayer(m));
+  state.markers = [];
+  filteredOutings().filter(o=>o.lat && o.lng).forEach(o=>{
+    const color = CATEGORY_COLORS[o.category] || "#888";
+    const opacity = o.status === "faite" ? 0.45 : 1;
+    const icon = L.divIcon({
+      className: "",
+      html: `<div style="width:16px;height:16px;border-radius:50%;background:${color};opacity:${opacity};border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,.4)"></div>`,
+      iconSize: [16,16], iconAnchor: [8,8]
+    });
+    const marker = L.marker([o.lat, o.lng], { icon }).addTo(state.map);
+    marker.bindPopup(`<strong>${escapeHtml(o.title)}</strong><br/>${o.category}`);
+    marker.on("click", ()=> openDetail(o.id));
+    state.markers.push(marker);
+  });
+}
+
+/* ============================================================
+   NOUVELLE SORTIE
+   ============================================================ */
+document.getElementById("fab").onclick = ()=>{
+  document.getElementById("outing-form").reset();
+  document.getElementById("geocode-status").textContent = "";
+  document.getElementById("outing-modal").dataset.lat = "";
+  document.getElementById("outing-modal").dataset.lng = "";
+  document.getElementById("outing-modal").classList.remove("hidden");
+};
+document.querySelectorAll("[data-close]").forEach(btn=>{
+  btn.addEventListener("click", (e)=> e.target.closest(".overlay").classList.add("hidden"));
+});
+
+document.getElementById("geocode-btn").onclick = async ()=>{
+  const address = document.getElementById("o-address").value.trim();
+  const statusEl = document.getElementById("geocode-status");
+  if (!address){ statusEl.textContent = "Renseigne une adresse d'abord."; return; }
+  statusEl.textContent = "Recherche en cours...";
+  try{
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(address + ", Paris")}`);
+    const results = await res.json();
+    if (results.length===0){ statusEl.textContent = "Adresse introuvable, essaie une formulation differente."; return; }
+    document.getElementById("outing-modal").dataset.lat = results[0].lat;
+    document.getElementById("outing-modal").dataset.lng = results[0].lon;
+    statusEl.textContent = "Localise : " + results[0].display_name;
+  } catch(err){
+    statusEl.textContent = "Erreur de geocodage.";
+  }
+};
+
+document.getElementById("outing-form").addEventListener("submit", async (e)=>{
+  e.preventDefault();
+  const modal = document.getElementById("outing-modal");
+  const dateVal = document.getElementById("o-date").value;
+  const payload = {
+    title: document.getElementById("o-title").value.trim(),
+    category: document.getElementById("o-category").value,
+    budget: document.getElementById("o-budget").value || null,
+    description: document.getElementById("o-desc").value.trim() || null,
+    url: document.getElementById("o-url").value.trim() || null,
+    address: document.getElementById("o-address").value.trim() || null,
+    lat: modal.dataset.lat ? parseFloat(modal.dataset.lat) : null,
+    lng: modal.dataset.lng ? parseFloat(modal.dataset.lng) : null,
+    start_at: dateVal ? new Date(dateVal).toISOString() : null,
+    status: dateVal ? "planifiee" : "idee",
+    created_by: state.user.id
+  };
+  const { error } = await sb.from("outings").insert(payload);
+  if (error){ toast("Erreur : " + error.message); return; }
+  modal.classList.add("hidden");
+  await loadAllData();
+  renderCurrentView();
+  toast("Sortie ajoutee.");
+});
+
+/* ============================================================
+   DETAIL D'UNE SORTIE
+   ============================================================ */
+function openDetail(outingId){
+  state.currentOutingId = outingId;
+  renderDetailModal();
+  document.getElementById("detail-modal").classList.remove("hidden");
+}
+
+function renderDetailModal(){
+  const o = state.outings.find(x=>x.id===state.currentOutingId);
+  if (!o) return;
+  document.getElementById("d-title").textContent = o.title;
+
+  const statusLabel = { idee:"Idee", planifiee:"Planifiee", faite:"Faite" }[o.status];
+  const budgetLabel = o.budget ? "€".repeat(o.budget) : "";
+  const dateLabel = o.start_at ? new Date(o.start_at).toLocaleString("fr-FR", { dateStyle:"full", timeStyle:"short" }) : "Pas encore de date";
+  document.getElementById("d-meta").innerHTML =
+    `<span class="status-badge">${statusLabel}</span>${o.category} ${budgetLabel ? "· "+budgetLabel : ""}<br/>${dateLabel}${o.address ? "<br/>"+escapeHtml(o.address) : ""}<br/>Propose par ${nameFor(o.created_by)}`;
+
+  document.getElementById("d-desc").textContent = o.description || "";
+  document.getElementById("d-url").innerHTML = o.url ? `<a href="${escapeAttr(o.url)}" target="_blank" rel="noopener">${escapeHtml(o.url)}</a>` : "";
+
+  // actions selon le statut
+  const actionsEl = document.getElementById("d-idea-actions");
+  actionsEl.innerHTML = "";
+  if (o.status !== "faite"){
+    const markDone = document.createElement("button");
+    markDone.className = "btn secondary";
+    markDone.style.marginRight = "8px";
+    markDone.textContent = "Marquer comme faite";
+    markDone.onclick = async ()=>{
+      await sb.from("outings").update({ status:"faite" }).eq("id", o.id);
+      await loadAllData(); renderDetailModal(); renderCurrentView();
+    };
+    actionsEl.appendChild(markDone);
+  }
+  if (!o.start_at){
+    const planBtn = document.createElement("button");
+    planBtn.className = "btn secondary";
+    planBtn.textContent = "Planifier une date";
+    planBtn.onclick = async ()=>{
+      const val = prompt("Date et heure (ex. 2026-10-04 20:00)");
+      if (!val) return;
+      const d = new Date(val.replace(" ", "T"));
+      if (isNaN(d)) { toast("Date non reconnue."); return; }
+      await sb.from("outings").update({ start_at: d.toISOString(), status:"planifiee" }).eq("id", o.id);
+      await loadAllData(); renderDetailModal(); renderCurrentView();
+    };
+    actionsEl.appendChild(planBtn);
+  }
+
+  // interesses
+  const interested = state.interests.filter(i=>i.outing_id===o.id);
+  document.getElementById("d-interests").innerHTML = interested.map(i=>`<img src="${avatarFor(i.user_id)}" title="${nameFor(i.user_id)}" />`).join("") || `<span style="font-size:12px;color:var(--ink-soft)">Personne pour l'instant</span>`;
+  const iAmIn = interested.some(i=>i.user_id===state.profile.id);
+  const interestBtn = document.getElementById("d-interest-btn");
+  interestBtn.textContent = iAmIn ? "Je me retire" : "Je suis chaud";
+  interestBtn.onclick = async ()=>{
+    if (iAmIn) await sb.from("interests").delete().eq("outing_id", o.id).eq("user_id", state.profile.id);
+    else await sb.from("interests").insert({ outing_id:o.id, user_id: state.profile.id });
+    await loadAllData(); renderDetailModal(); renderCurrentView();
+  };
+
+  // sondage de dispos, uniquement si pas encore de date fixee
+  const pollSection = document.getElementById("d-poll-section");
+  if (!o.start_at){
+    pollSection.classList.remove("hidden");
+    const slots = state.pollSlots.filter(s=>s.outing_id===o.id).sort((a,b)=> new Date(a.starts_at)-new Date(b.starts_at));
+    const slotsEl = document.getElementById("d-poll-slots");
+    slotsEl.innerHTML = "";
+    slots.forEach(s=>{
+      const votes = state.pollVotes.filter(v=>v.slot_id===s.id);
+      const mine = votes.some(v=>v.user_id===state.profile.id);
+      const row = document.createElement("div");
+      row.className = "slot-row";
+      row.innerHTML = `<span>${new Date(s.starts_at).toLocaleString("fr-FR",{dateStyle:"medium", timeStyle:"short"})} (${votes.length})</span>`;
+      const btn = document.createElement("button");
+      btn.className = "vote" + (mine ? " mine" : "");
+      btn.textContent = mine ? "Je suis dispo ✓" : "Je suis dispo";
+      btn.onclick = async ()=>{
+        if (mine) await sb.from("poll_votes").delete().eq("slot_id", s.id).eq("user_id", state.profile.id);
+        else await sb.from("poll_votes").insert({ slot_id: s.id, user_id: state.profile.id });
+        await loadAllData(); renderDetailModal();
+      };
+      row.appendChild(btn);
+      slotsEl.appendChild(row);
+    });
+  } else {
+    pollSection.classList.add("hidden");
+  }
+  document.getElementById("d-add-slot").onclick = async ()=>{
+    const val = document.getElementById("d-new-slot").value;
+    if (!val) return;
+    await sb.from("poll_slots").insert({ outing_id:o.id, starts_at: new Date(val).toISOString(), created_by: state.profile.id });
+    document.getElementById("d-new-slot").value = "";
+    await loadAllData(); renderDetailModal();
+  };
+
+  // avis, uniquement si la sortie est faite
+  const reviewSection = document.getElementById("d-review-section");
+  if (o.status === "faite"){
+    reviewSection.classList.remove("hidden");
+    const reviews = state.reviews.filter(r=>r.outing_id===o.id);
+    document.getElementById("d-reviews").innerHTML = reviews.map(r=>
+      `<div style="margin-bottom:8px;font-size:13px"><strong>${nameFor(r.user_id)}</strong> - ${"★".repeat(r.rating)}<br/>${escapeHtml(r.comment||"")}</div>`
+    ).join("") || `<p style="font-size:13px;color:var(--ink-soft)">Aucun avis pour l'instant.</p>`;
+    const mine = reviews.find(r=>r.user_id===state.profile.id);
+    if (mine){
+      document.getElementById("d-rating").value = mine.rating;
+      document.getElementById("d-comment").value = mine.comment || "";
+    }
+    document.getElementById("d-save-review").onclick = async ()=>{
+      const rating = parseInt(document.getElementById("d-rating").value);
+      const comment = document.getElementById("d-comment").value.trim();
+      await sb.from("reviews").upsert({ outing_id:o.id, user_id:state.profile.id, rating, comment });
+      await loadAllData(); renderDetailModal();
+      toast("Avis enregistre.");
+    };
+  } else {
+    reviewSection.classList.add("hidden");
+  }
+
+  document.getElementById("d-delete-btn").onclick = async ()=>{
+    if (!confirm("Supprimer definitivement cette sortie ?")) return;
+    await sb.from("outings").delete().eq("id", o.id);
+    document.getElementById("detail-modal").classList.add("hidden");
+    await loadAllData(); renderCurrentView();
+    toast("Sortie supprimee.");
+  };
+}
+
+/* ============================================================
+   UTILITAIRES
+   ============================================================ */
+function escapeHtml(str){
+  return String(str).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+function escapeAttr(str){ return escapeHtml(str); }
+</script>
+</body>
+</html>
