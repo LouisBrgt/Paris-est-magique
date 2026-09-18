@@ -463,15 +463,18 @@ button.vote.mine{background:var(--accent-soft);border-color:var(--accent-soft);c
 <!-- ================= CREATION PROFIL ================= -->
 <div id="profile-screen" class="hidden">
   <div class="auth-box">
-    <h2 style="margin:0 0 6px">Ton profil</h2>
-    <p class="auth-sub">Une photo et ton nom, pour que le groupe te reconnaisse.</p>
+    <h2 style="margin:0 0 6px" id="profile-screen-title">Ton profil</h2>
+    <p class="auth-sub" id="profile-screen-sub">Une photo et ton nom, pour que le groupe te reconnaisse.</p>
     <input type="file" id="avatar-input" accept="image/*" class="hidden" />
     <button type="button" class="avatar-picker" id="avatar-picker" aria-label="Ajouter une photo de profil">Ajouter<br/>une photo</button>
     <div class="row2">
       <div class="field"><label for="profile-first">Prénom</label><input id="profile-first" required /></div>
       <div class="field"><label for="profile-last">Nom</label><input id="profile-last" required /></div>
     </div>
-    <button class="btn" id="save-profile-btn">Valider</button>
+    <div style="display:flex;gap:8px">
+      <button class="btn" id="save-profile-btn">Valider</button>
+      <button type="button" class="btn ghost hidden" id="profile-cancel-btn">Annuler</button>
+    </div>
     <p class="error-text hidden" id="profile-error" role="alert"></p>
   </div>
 </div>
@@ -492,6 +495,7 @@ button.vote.mine{background:var(--accent-soft);border-color:var(--accent-soft);c
           <button type="button" data-theme-choice="light" role="radio">Clair</button>
           <button type="button" data-theme-choice="dark" role="radio">Sombre</button>
         </div>
+        <button type="button" id="edit-profile-btn" role="menuitem">🪪 Modifier mon profil</button>
         <button type="button" id="friends-btn" role="menuitem">👥 Ami·e·s</button>
         <button type="button" id="trash-btn" role="menuitem">🗑️ Corbeille</button>
         <button type="button" id="admin-btn" role="menuitem" class="hidden">🛠️ Administration</button>
@@ -1290,6 +1294,35 @@ sb.auth.onAuthStateChange((_event, session)=>{
    PROFIL
    ============================================================ */
 let pendingAvatarFile = null;
+let editingProfileMode = false;
+
+function openEditProfile(){
+  editingProfileMode = true;
+  pendingAvatarFile = null;
+  document.getElementById("profile-screen-title").textContent = "Modifier mon profil";
+  document.getElementById("profile-screen-sub").textContent = "Change ta photo ou ton nom quand tu veux.";
+  document.getElementById("profile-first").value = state.profile.first_name || "";
+  document.getElementById("profile-last").value = state.profile.last_name || "";
+  document.getElementById("avatar-picker").innerHTML = state.profile.avatar_path
+    ? `<img src="${avatarFor(state.profile.id)}" alt="" />`
+    : "Ajouter<br/>une photo";
+  document.getElementById("save-profile-btn").textContent = "Enregistrer";
+  document.getElementById("profile-cancel-btn").classList.remove("hidden");
+  document.getElementById("profile-error").classList.add("hidden");
+  document.getElementById("app").classList.add("hidden");
+  document.getElementById("fab").classList.add("hidden");
+  document.querySelector(".bottom-nav").classList.add("hidden");
+  document.getElementById("profile-screen").classList.remove("hidden");
+}
+document.getElementById("edit-profile-btn").onclick = openEditProfile;
+
+document.getElementById("profile-cancel-btn").onclick = ()=>{
+  editingProfileMode = false;
+  document.getElementById("profile-screen").classList.add("hidden");
+  document.getElementById("app").classList.remove("hidden");
+  document.getElementById("fab").classList.remove("hidden");
+  document.querySelector(".bottom-nav").classList.remove("hidden");
+};
 
 document.getElementById("avatar-picker").onclick = ()=> document.getElementById("avatar-input").click();
 document.getElementById("avatar-input").onchange = (e)=>{
@@ -1310,7 +1343,7 @@ document.getElementById("save-profile-btn").onclick = async ()=>{
   errEl.classList.add("hidden");
   if (!first || !last){ errEl.textContent = "Prénom et nom sont requis."; errEl.classList.remove("hidden"); return; }
 
-  let avatarPath = null;
+  let avatarPath = editingProfileMode ? (state.profile?.avatar_path || null) : null;
   if (pendingAvatarFile){
     const path = `${state.user.id}/avatar.jpg`;
     const { error: upErr } = await sb.storage.from("avatars").upload(path, pendingAvatarFile, { upsert: true, contentType: pendingAvatarFile.type });
@@ -1318,11 +1351,27 @@ document.getElementById("save-profile-btn").onclick = async ()=>{
     avatarPath = path;
   }
 
-  const { error } = await sb.from("profiles").insert({
-    id: state.user.id, first_name: first, last_name: last, avatar_path: avatarPath
-  });
+  let error;
+  if (editingProfileMode){
+    ({ error } = await sb.from("profiles").update({ first_name: first, last_name: last, avatar_path: avatarPath }).eq("id", state.user.id));
+  } else {
+    ({ error } = await sb.from("profiles").insert({ id: state.user.id, first_name: first, last_name: last, avatar_path: avatarPath }));
+  }
   if (error){ errEl.textContent = "Erreur : " + error.message; errEl.classList.remove("hidden"); return; }
-  await boot();
+
+  if (editingProfileMode){
+    editingProfileMode = false;
+    if (pendingAvatarFile) delete state.avatarUrls[avatarPath];
+    await loadAllData();
+    renderMe();
+    document.getElementById("profile-screen").classList.add("hidden");
+    document.getElementById("app").classList.remove("hidden");
+    document.getElementById("fab").classList.remove("hidden");
+    document.querySelector(".bottom-nav").classList.remove("hidden");
+    toast("Profil mis à jour.");
+  } else {
+    await boot();
+  }
 };
 
 /* ============================================================
@@ -1331,6 +1380,11 @@ document.getElementById("save-profile-btn").onclick = async ()=>{
 async function boot(){
   const { data: profile } = await sb.from("profiles").select("*").eq("id", state.user.id).maybeSingle();
   if (!profile){
+    editingProfileMode = false;
+    document.getElementById("profile-screen-title").textContent = "Ton profil";
+    document.getElementById("profile-screen-sub").textContent = "Une photo et ton nom, pour que le groupe te reconnaisse.";
+    document.getElementById("save-profile-btn").textContent = "Valider";
+    document.getElementById("profile-cancel-btn").classList.add("hidden");
     document.getElementById("auth-screen").classList.add("hidden");
     document.getElementById("profile-screen").classList.remove("hidden");
     return;
