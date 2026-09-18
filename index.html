@@ -393,6 +393,8 @@
     <p id="d-desc"></p>
     <p id="d-url"></p>
 
+    <button class="btn secondary" id="d-invite-btn" style="margin-bottom:10px">🔗 Copier le lien d'invitation</button>
+
     <div id="d-idea-actions"></div>
 
     <hr class="divider" />
@@ -451,6 +453,14 @@ const CATEGORY_COLORS = {
 };
 const DOW = ["Lu","Ma","Me","Je","Ve","Sa","Di"];
 const MONTHS = ["Janvier","Fevrier","Mars","Avril","Mai","Juin","Juillet","Aout","Septembre","Octobre","Novembre","Decembre"];
+
+/* ============================================================
+   LIEN D'INVITATION DIRECT
+   ============================================================ */
+let pendingOutingId = (function(){
+  const m = location.hash.match(/outing=([^&]+)/);
+  return m ? decodeURIComponent(m[1]) : null;
+})();
 
 /* ============================================================
    ETAT GLOBAL
@@ -606,6 +616,12 @@ async function boot(){
   subscribeRealtime();
   if ("Notification" in window && Notification.permission === "default"){
     Notification.requestPermission();
+  }
+  if (pendingOutingId){
+    const id = pendingOutingId;
+    pendingOutingId = null;
+    history.replaceState(null, "", location.pathname + location.search);
+    if (state.outings.some(o=>o.id===id)) openDetail(id);
   }
 }
 
@@ -998,6 +1014,16 @@ function renderDetailModal(){
 
   document.getElementById("d-desc").textContent = o.description || "";
   document.getElementById("d-url").innerHTML = o.url ? `<a href="${escapeAttr(o.url)}" target="_blank" rel="noopener">${escapeHtml(o.url)}</a>` : "";
+
+  document.getElementById("d-invite-btn").onclick = async ()=>{
+    const link = `${location.origin}${location.pathname}#outing=${o.id}`;
+    try{
+      await navigator.clipboard.writeText(link);
+      toast("Lien copié ! Envoie-le à tes amis.");
+    } catch(err){
+      prompt("Copie ce lien pour inviter tes amis :", link);
+    }
+  };
 
   // actions selon le statut
   const actionsEl = document.getElementById("d-idea-actions");
