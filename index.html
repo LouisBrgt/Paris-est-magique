@@ -257,7 +257,7 @@
 
     <p class="switch-mode">
       <span id="to-signup">Pas encore de compte ? <button type="button" class="link-btn" id="show-signup">En creer un</button></span>
-      <span id="to-login" class="hidden">Deja inscrit ? <button type="button" class="link-btn" id="show-login">Se connecter</button></span>
+      <span id="to-login" class="hidden">Déjà inscrit·e ? <button type="button" class="link-btn" id="show-login">Se connecter</button></span>
     </p>
   </div>
 </div>
@@ -422,9 +422,9 @@
     <div id="d-idea-actions"></div>
 
     <hr class="divider" />
-    <h3 style="font-size:14px;margin:0 0 8px">Interesses</h3>
+    <h3 style="font-size:14px;margin:0 0 8px">Intéressé·e·s</h3>
     <div class="avatars-row" id="d-interests"></div>
-    <button class="btn secondary" id="d-interest-btn" style="margin-top:10px">Je suis chaud</button>
+    <button class="btn secondary" id="d-interest-btn" style="margin-top:10px">Je suis chaud·e</button>
 
     <div id="d-poll-section" class="hidden">
       <hr class="divider" />
@@ -549,7 +549,7 @@ document.getElementById("signup-form").addEventListener("submit", async (e)=>{
   errEl.classList.add("hidden");
   const { error } = await sb.auth.signUp({ email, password });
   if (error){ errEl.textContent = "Inscription impossible : " + error.message; errEl.classList.remove("hidden"); return; }
-  toast("Compte cree. Tu es connecte.");
+  toast("Compte cree. Tu es connecté·e.");
 });
 
 document.querySelectorAll(".pw-toggle").forEach(btn=>{
@@ -707,7 +707,7 @@ function handleRealtimeChange(payload){
   }
   if (table === "interests" && eventType === "INSERT" && newRow.user_id !== state.profile?.id){
     const outing = state.outings.find(o=>o.id===newRow.outing_id);
-    notify(`🔥 ${nameFor(newRow.user_id)} est chaud pour "${outing ? outing.title : "une sortie"}"`);
+    notify(`🔥 ${nameFor(newRow.user_id)} est chaud·e pour "${outing ? outing.title : "une sortie"}"`);
   }
 }
 
@@ -1070,9 +1070,9 @@ function renderDetailModal(){
     const link = `${location.origin}${location.pathname}#outing=${o.id}`;
     try{
       await navigator.clipboard.writeText(link);
-      toast("Lien copié ! Envoie-le à tes amis.");
+      toast("Lien copié ! Envoie-le à tes ami·e·s.");
     } catch(err){
-      prompt("Copie ce lien pour inviter tes amis :", link);
+      prompt("Copie ce lien pour inviter tes ami·e·s :", link);
     }
   };
 
@@ -1110,7 +1110,7 @@ function renderDetailModal(){
   document.getElementById("d-interests").innerHTML = interested.map(i=>`<img src="${avatarFor(i.user_id)}" title="${nameFor(i.user_id)}" />`).join("") || `<span style="font-size:12px;color:var(--ink-soft)">Personne pour l'instant</span>`;
   const iAmIn = interested.some(i=>i.user_id===state.profile.id);
   const interestBtn = document.getElementById("d-interest-btn");
-  interestBtn.textContent = iAmIn ? "Je me retire" : "Je suis chaud";
+  interestBtn.textContent = iAmIn ? "Je me retire" : "Je suis chaud·e";
   interestBtn.onclick = async ()=>{
     if (iAmIn) await sb.from("interests").delete().eq("outing_id", o.id).eq("user_id", state.profile.id);
     else await sb.from("interests").insert({ outing_id:o.id, user_id: state.profile.id });
