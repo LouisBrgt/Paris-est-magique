@@ -87,6 +87,12 @@
   .btn.danger{background:transparent;border-color:var(--danger);color:var(--danger)}
   .btn:disabled{opacity:.5;cursor:default}
   .link-btn{background:none;border:none;color:var(--moss-dark);text-decoration:underline;cursor:pointer;font-size:13px;padding:0}
+  .pw-wrap{position:relative}
+  .pw-wrap input{padding-right:40px}
+  .pw-toggle{
+    position:absolute;right:6px;top:50%;transform:translateY(-50%);
+    background:none;border:none;cursor:pointer;font-size:15px;color:var(--ink-soft);padding:4px 6px;
+  }
   .error-text{color:var(--danger);font-size:13px;margin:8px 0 0}
   .switch-mode{margin-top:20px;font-size:13px;color:var(--ink-soft)}
 
@@ -209,7 +215,10 @@
       </div>
       <div class="field">
         <label>Mot de passe</label>
-        <input type="password" id="login-password" required autocomplete="current-password" />
+        <div class="pw-wrap">
+          <input type="password" id="login-password" required autocomplete="current-password" />
+          <button type="button" class="pw-toggle" data-target="login-password" aria-label="Afficher le mot de passe">👁</button>
+        </div>
       </div>
       <button class="btn" type="submit">Se connecter</button>
       <p class="error-text hidden" id="login-error"></p>
@@ -222,7 +231,10 @@
       </div>
       <div class="field">
         <label>Mot de passe (6 caracteres minimum)</label>
-        <input type="password" id="signup-password" required minlength="6" autocomplete="new-password" />
+        <div class="pw-wrap">
+          <input type="password" id="signup-password" required minlength="6" autocomplete="new-password" />
+          <button type="button" class="pw-toggle" data-target="signup-password" aria-label="Afficher le mot de passe">👁</button>
+        </div>
       </div>
       <button class="btn" type="submit">Creer mon compte</button>
       <p class="error-text hidden" id="signup-error"></p>
@@ -324,8 +336,8 @@
             <option value="bar">Bar</option>
             <option value="expo">Expo</option>
             <option value="concert">Concert</option>
-            <option value="resto">Ciné</option>
-            <option value="soiree">Soiree</option>
+            <option value="ciné">Ciné</option>
+            <option value="soirées">Soirée</option>
             <option value="balade">Balade</option>
             <option value="autre">Autre</option>
           </select>
@@ -494,6 +506,15 @@ document.getElementById("signup-form").addEventListener("submit", async (e)=>{
   toast("Compte cree. Tu es connecte.");
 });
 
+document.querySelectorAll(".pw-toggle").forEach(btn=>{
+  btn.addEventListener("click", ()=>{
+    const input = document.getElementById(btn.dataset.target);
+    const showing = input.type === "text";
+    input.type = showing ? "password" : "text";
+    btn.textContent = showing ? "👁" : "🙈";
+  });
+});
+
 document.getElementById("logout-btn").onclick = async ()=>{
   await sb.auth.signOut();
   location.reload();
@@ -571,6 +592,9 @@ async function boot(){
   renderMe();
   renderCalendar();
   subscribeRealtime();
+  if ("Notification" in window && Notification.permission === "default"){
+    Notification.requestPermission();
+  }
 }
 
 async function loadAllData(){
@@ -616,9 +640,29 @@ function renderMe(){
   document.getElementById("me-name").textContent = state.profile.first_name;
 }
 
+function notify(msg){
+  toast(msg);
+  if ("Notification" in window && Notification.permission === "granted"){
+    new Notification("Sorties", { body: msg });
+  }
+}
+
+function handleRealtimeChange(payload){
+  const { table, eventType, new: newRow, old: oldRow } = payload;
+  if (!newRow) return;
+  if (table === "outings" && eventType === "UPDATE" && !oldRow.start_at && newRow.start_at){
+    notify(`📅 Date fixée pour "${newRow.title}" !`);
+  }
+  if (table === "interests" && eventType === "INSERT" && newRow.user_id !== state.profile?.id){
+    const outing = state.outings.find(o=>o.id===newRow.outing_id);
+    notify(`🔥 ${nameFor(newRow.user_id)} est chaud pour "${outing ? outing.title : "une sortie"}"`);
+  }
+}
+
 function subscribeRealtime(){
   sb.channel("public-changes")
-    .on("postgres_changes", { event: "*", schema: "public" }, async ()=>{
+    .on("postgres_changes", { event: "*", schema: "public" }, async (payload)=>{
+      handleRealtimeChange(payload);
       await loadAllData();
       renderCurrentView();
     })
