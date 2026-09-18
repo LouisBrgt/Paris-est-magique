@@ -313,7 +313,7 @@
 <div id="outing-modal" class="overlay hidden">
   <div class="modal">
     <button class="modal-close" data-close>&times;</button>
-    <h2>Proposer une sortie</h2>
+    <h2 id="outing-modal-title">Proposer une sortie</h2>
     <form id="outing-form">
       <div class="field"><label>Titre</label><input id="o-title" required /></div>
       <div class="row2">
@@ -398,6 +398,7 @@
     </div>
 
     <hr class="divider" />
+    <button class="btn secondary" id="d-edit-btn" style="margin-right:8px">Modifier la sortie</button>
     <button class="btn danger" id="d-delete-btn">Supprimer la sortie</button>
   </div>
 </div>
@@ -444,6 +445,7 @@ let state = {
   calMonth: new Date().getMonth(),
   calYear: new Date().getFullYear(),
   currentOutingId: null,
+  editingOutingId: null,
   map: null,
   markers: []
 };
@@ -766,12 +768,38 @@ function renderMap(){
    NOUVELLE SORTIE
    ============================================================ */
 document.getElementById("fab").onclick = ()=>{
+  state.editingOutingId = null;
+  document.getElementById("outing-modal-title").textContent = "Proposer une sortie";
   document.getElementById("outing-form").reset();
   document.getElementById("geocode-status").textContent = "";
   document.getElementById("outing-modal").dataset.lat = "";
   document.getElementById("outing-modal").dataset.lng = "";
   document.getElementById("outing-modal").classList.remove("hidden");
 };
+
+function toDatetimeLocal(isoStr){
+  const d = new Date(isoStr);
+  const pad = n => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function openEditModal(o){
+  state.editingOutingId = o.id;
+  const modal = document.getElementById("outing-modal");
+  document.getElementById("outing-modal-title").textContent = "Modifier la sortie";
+  document.getElementById("o-title").value = o.title || "";
+  document.getElementById("o-category").value = o.category || "resto";
+  document.getElementById("o-budget").value = o.budget || "";
+  document.getElementById("o-desc").value = o.description || "";
+  document.getElementById("o-url").value = o.url || "";
+  document.getElementById("o-address").value = o.address || "";
+  document.getElementById("geocode-status").textContent = "";
+  modal.dataset.lat = (o.lat !== null && o.lat !== undefined) ? o.lat : "";
+  modal.dataset.lng = (o.lng !== null && o.lng !== undefined) ? o.lng : "";
+  document.getElementById("o-date").value = o.start_at ? toDatetimeLocal(o.start_at) : "";
+  document.getElementById("detail-modal").classList.add("hidden");
+  modal.classList.remove("hidden");
+}
 document.querySelectorAll("[data-close]").forEach(btn=>{
   btn.addEventListener("click", (e)=> e.target.closest(".overlay").classList.add("hidden"));
 });
@@ -797,6 +825,16 @@ document.getElementById("outing-form").addEventListener("submit", async (e)=>{
   e.preventDefault();
   const modal = document.getElementById("outing-modal");
   const dateVal = document.getElementById("o-date").value;
+  const editingId = state.editingOutingId;
+
+  let status;
+  if (editingId){
+    const orig = state.outings.find(x=>x.id===editingId);
+    status = (orig && orig.status === "faite") ? "faite" : (dateVal ? "planifiee" : "idee");
+  } else {
+    status = dateVal ? "planifiee" : "idee";
+  }
+
   const payload = {
     title: document.getElementById("o-title").value.trim(),
     category: document.getElementById("o-category").value,
@@ -807,15 +845,22 @@ document.getElementById("outing-form").addEventListener("submit", async (e)=>{
     lat: modal.dataset.lat ? parseFloat(modal.dataset.lat) : null,
     lng: modal.dataset.lng ? parseFloat(modal.dataset.lng) : null,
     start_at: dateVal ? new Date(dateVal).toISOString() : null,
-    status: dateVal ? "planifiee" : "idee",
-    created_by: state.user.id
+    status
   };
-  const { error } = await sb.from("outings").insert(payload);
+
+  let error;
+  if (editingId){
+    ({ error } = await sb.from("outings").update(payload).eq("id", editingId));
+  } else {
+    payload.created_by = state.user.id;
+    ({ error } = await sb.from("outings").insert(payload));
+  }
   if (error){ toast("Erreur : " + error.message); return; }
   modal.classList.add("hidden");
+  state.editingOutingId = null;
   await loadAllData();
   renderCurrentView();
-  toast("Sortie ajoutee.");
+  toast(editingId ? "Sortie mise a jour." : "Sortie ajoutee.");
 });
 
 /* ============================================================
@@ -940,6 +985,8 @@ function renderDetailModal(){
   } else {
     reviewSection.classList.add("hidden");
   }
+
+  document.getElementById("d-edit-btn").onclick = ()=> openEditModal(o);
 
   document.getElementById("d-delete-btn").onclick = async ()=>{
     if (!confirm("Supprimer definitivement cette sortie ?")) return;
