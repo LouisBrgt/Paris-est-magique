@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Sorties</title>
+<title>+1</title>
 <link rel="manifest" href="manifest.json" />
 <meta name="theme-color" content="#F7F5FA" id="theme-color-meta" />
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-<meta name="apple-mobile-web-app-title" content="Sorties" />
+<meta name="apple-mobile-web-app-title" content="+1" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,500;0,600;1,500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -410,7 +410,7 @@ button.vote.mine{background:var(--accent-soft);border-color:var(--accent-soft);c
 <!-- ================= AUTH ================= -->
 <div id="auth-screen">
   <div class="auth-box">
-    <p class="wordmark">Sorties</p>
+    <p class="wordmark">+1</p>
     <p class="auth-sub">Le site du groupe pour organiser les prochaines sorties.</p>
 
     <form id="login-form">
@@ -471,7 +471,7 @@ button.vote.mine{background:var(--accent-soft);border-color:var(--accent-soft);c
 <!-- ================= APP ================= -->
 <div id="app" class="hidden">
   <header class="top">
-    <p class="wordmark">Sorties</p>
+    <p class="wordmark">+1</p>
     <div class="dropdown">
       <button class="who" id="profile-menu-btn" aria-haspopup="menu" aria-expanded="false" aria-label="Menu du profil">
         <img id="me-avatar" src="" alt="" />
@@ -750,7 +750,7 @@ button.vote.mine{background:var(--accent-soft);border-color:var(--accent-soft);c
 <div id="install-modal" class="overlay hidden">
   <div class="modal">
     <div class="modal-head">
-      <h2>📲 Installer Sorties</h2>
+      <h2>📲 Installer +1</h2>
       <button class="icon-btn" data-close aria-label="Fermer">×</button>
     </div>
     <div id="install-modal-body"></div>
@@ -1441,7 +1441,7 @@ function renderMe(){
 function notify(msg){
   toast(msg);
   if ("Notification" in window && Notification.permission === "granted"){
-    new Notification("Sorties", { body: msg });
+    new Notification("+1", { body: msg });
   }
 }
 
@@ -2402,7 +2402,7 @@ function maybeShowInstallPrompt(){
 
   if (isIOS){
     body.innerHTML = `
-      <p style="font-size:14px">Installe "Sorties" sur ton écran d'accueil pour l'ouvrir comme une vraie app :</p>
+      <p style="font-size:14px">Installe "+1" sur ton écran d'accueil pour l'ouvrir comme une vraie app :</p>
       <ol style="padding-left:18px;font-size:14px;margin:10px 0">
         <li>Appuie sur <strong>Partager</strong> (le carré avec la flèche) en bas de Safari</li>
         <li>Fais défiler et appuie sur <strong>"Sur l'écran d'accueil"</strong></li>
@@ -2411,7 +2411,7 @@ function maybeShowInstallPrompt(){
     `;
     actionBtn.classList.add("hidden");
   } else {
-    body.innerHTML = `<p style="font-size:14px">Installe "Sorties" sur ton écran d'accueil pour l'ouvrir comme une vraie app, en un clic.</p>`;
+    body.innerHTML = `<p style="font-size:14px">Installe "+1" sur ton écran d'accueil pour l'ouvrir comme une vraie app, en un clic.</p>`;
     actionBtn.classList.remove("hidden");
     actionBtn.onclick = async ()=>{
       if (deferredInstallPrompt){
@@ -2449,7 +2449,7 @@ function buildIcsContent(o){
   const lines = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
-    "PRODID:-//Sorties//FR",
+    "PRODID:-//+1//FR",
     "CALSCALE:GREGORIAN",
     "BEGIN:VEVENT",
     "UID:" + o.id + "@sorties.app",
