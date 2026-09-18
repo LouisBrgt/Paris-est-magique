@@ -1185,9 +1185,18 @@ async function sendFriendRequest(otherId){
 }
 async function respondFriendRequest(friendshipId, newStatus){
   if (newStatus === null){
-    await sb.from("friendships").delete().eq("id", friendshipId);
+    const { error } = await sb.from("friendships").delete().eq("id", friendshipId);
+    if (error){ toast("Erreur : " + error.message); return; }
   } else {
-    await sb.from("friendships").update({ status: newStatus, responded_at: new Date().toISOString() }).eq("id", friendshipId);
+    const { data, error } = await sb.from("friendships")
+      .update({ status: newStatus, responded_at: new Date().toISOString() })
+      .eq("id", friendshipId)
+      .select();
+    if (error){ toast("Erreur : " + error.message); return; }
+    if (!data || data.length === 0){
+      toast("Impossible d'accepter cette demande (droits insuffisants). Vérifie la policy friendships_update_involved.");
+      return;
+    }
   }
   await loadAllData(); renderFriends(); renderCurrentView();
   toast(newStatus === "accepted" ? "Vous êtes ami·e·s !" : "Demande refusée.");
