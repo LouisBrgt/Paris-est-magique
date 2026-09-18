@@ -260,6 +260,14 @@ nav.tabs button.active{color:var(--accent-ink);background:var(--accent)}
 }
 .invitee-pill img{width:26px;height:26px;border-radius:50%;object-fit:cover}
 .invitee-pill[aria-pressed="true"]{border-color:var(--accent-soft);background:color-mix(in srgb, var(--accent-soft) 15%, transparent)}
+.plus-one-stepper{display:inline-flex;align-items:center;gap:2px;border:1px solid var(--line);border-radius:10px;padding:2px}
+.plus-one-stepper button{
+  width:40px;height:40px;border:none;background:none;color:var(--ink);font-size:18px;font-weight:700;cursor:pointer;border-radius:8px;
+}
+.plus-one-stepper button:hover{background:var(--bg)}
+.plus-one-stepper button:disabled{opacity:.35;cursor:default}
+.plus-one-stepper button:disabled:hover{background:none}
+.plus-one-stepper .count{min-width:28px;text-align:center;font-size:14px;font-weight:700}
 .filters-row-controls{display:flex;flex-wrap:wrap;gap:14px;align-items:center;font-size:14px}
 .filters-row-controls select{border:1px solid var(--line);background:var(--bg);padding:8px 10px;border-radius:8px;font-size:14px;min-height:40px}
 .check-row{display:flex;align-items:center;gap:8px;min-height:40px}
@@ -640,6 +648,16 @@ button.vote.mine{background:var(--accent-soft);border-color:var(--accent-soft);c
             </div>
             <input type="hidden" id="o-emoji" value="" />
           </div>
+          <div class="field" id="o-max-plus-ones-field">
+            <label for="o-max-plus-ones">+1 autorisés</label>
+            <select id="o-max-plus-ones">
+              <option value="0">Aucun</option>
+              <option value="1" selected>1</option>
+              <option value="2">2</option>
+              <option value="3">3</option>
+              <option value="">Illimité</option>
+            </select>
+          </div>
           <div class="field"><label for="o-budget">Budget</label>
             <select id="o-budget">
               <option value="">-</option>
@@ -673,6 +691,7 @@ button.vote.mine{background:var(--accent-soft);border-color:var(--accent-soft);c
       </div>
     </div>
     <div class="detail-meta" id="d-meta"></div>
+    <p id="d-total-people" style="font-size:13px;font-weight:700;color:var(--accent-soft);margin:0 0 10px"></p>
     <p id="d-desc"></p>
     <p id="d-url"></p>
 
@@ -1926,6 +1945,7 @@ function openCreateModal(prefill){
   const modal = document.getElementById("outing-modal");
   modal.dataset.lat = ""; modal.dataset.lng = "";
   document.getElementById("o-visibility-field").classList.remove("hidden");
+  document.getElementById("o-max-plus-ones-field").classList.remove("hidden");
   selectedInvitees = new Set();
   setVisibility("public");
 
@@ -1962,9 +1982,11 @@ function openEditModal(o){
 
   const iAmCreator = o.created_by === state.profile.id;
   document.getElementById("o-visibility-field").classList.toggle("hidden", !iAmCreator);
+  document.getElementById("o-max-plus-ones-field").classList.toggle("hidden", !iAmCreator);
   if (iAmCreator){
     selectedInvitees = new Set(state.outingInvitees.filter(i=>i.outing_id===o.id).map(i=>i.user_id));
     setVisibility(o.visibility || "public");
+    document.getElementById("o-max-plus-ones").value = (o.max_plus_ones === null || o.max_plus_ones === undefined) ? "" : String(o.max_plus_ones);
   }
 
   document.getElementById("detail-modal").classList.add("hidden");
@@ -2060,6 +2082,7 @@ document.getElementById("outing-form").addEventListener("submit", async (e)=>{
   const outingId = editingId || crypto.randomUUID();
   const visibilityFieldVisible = !document.getElementById("o-visibility-field").classList.contains("hidden");
   const visibility = document.getElementById("o-visibility").value;
+  const maxPlusOnesRaw = document.getElementById("o-max-plus-ones").value;
 
   const payload = {
     title: document.getElementById("o-title").value.trim(),
@@ -2074,6 +2097,7 @@ document.getElementById("outing-form").addEventListener("submit", async (e)=>{
     start_at: dateVal ? new Date(dateVal).toISOString() : null,
     status
   };
+  if (visibilityFieldVisible) payload.max_plus_ones = maxPlusOnesRaw === "" ? null : parseInt(maxPlusOnesRaw, 10);
   if (visibilityFieldVisible) payload.visibility = visibility;
 
   let error;
@@ -2225,7 +2249,19 @@ function renderDetailModal(){
 
   const interested = state.interests.filter(i=>i.outing_id===o.id);
   const iAmIn = interested.some(i=>i.user_id===state.profile.id);
-  document.getElementById("d-interests").innerHTML = interested.map(i=>`<img src="${avatarFor(i.user_id)}" alt="" title="${escapeAttr(nameFor(i.user_id))}" />`).join("") || `<span style="font-size:13px;color:var(--ink-soft)">Personne pour l'instant</span>`;
+  const myInterest = interested.find(i=>i.user_id===state.profile.id);
+
+  const totalPlusOnes = interested.reduce((sum,i)=> sum + (i.plus_ones||0), 0);
+  const totalPeople = interested.length + totalPlusOnes;
+  document.getElementById("d-total-people").textContent = totalPeople > 0
+    ? `${totalPeople} personne${totalPeople>1?"s":""} au total`
+    : "";
+
+  document.getElementById("d-interests").innerHTML = interested.map(i=>{
+    const n = i.plus_ones || 0;
+    return `<span class="invitee-pill"><img src="${avatarFor(i.user_id)}" alt="" />${escapeHtml(nameFor(i.user_id))}${n>0 ? ` · ramène +${n}` : ""}</span>`;
+  }).join("") || `<span style="font-size:13px;color:var(--ink-soft)">Personne pour l'instant</span>`;
+  document.getElementById("d-interests").className = "invitee-picker";
 
   const primary = document.getElementById("d-primary-area");
   primary.innerHTML = "";
@@ -2255,7 +2291,7 @@ function renderDetailModal(){
     primary.appendChild(wrap);
   } else if (o.status === "planifiee"){
     const row = document.createElement("div");
-    row.style.cssText = "display:flex;gap:10px;flex-wrap:wrap";
+    row.style.cssText = "display:flex;gap:10px;flex-wrap:wrap;align-items:center";
     const interestBtn = document.createElement("button");
     interestBtn.className = "btn" + (iAmIn ? "" : "");
     interestBtn.textContent = iAmIn ? "Je ne peux pas" : "Je viens";
@@ -2265,20 +2301,29 @@ function renderDetailModal(){
     icsBtn.textContent = "📅 Ajouter à mon agenda";
     icsBtn.onclick = ()=> downloadIcs(o);
     row.appendChild(interestBtn);
+    if (iAmIn) row.appendChild(buildPlusOneStepper(o, myInterest));
     row.appendChild(icsBtn);
     primary.appendChild(row);
   } else if (!hasSlots){
+    const row = document.createElement("div");
+    row.style.cssText = "display:flex;gap:10px;flex-wrap:wrap;align-items:center";
     const interestBtn = document.createElement("button");
-    interestBtn.className = "btn btn-block";
+    interestBtn.className = "btn" + (iAmIn ? "" : " btn-block");
     interestBtn.textContent = iAmIn ? "Je ne peux pas" : "Je viens";
     interestBtn.onclick = ()=> toggleInterest(o, iAmIn);
-    primary.appendChild(interestBtn);
+    row.appendChild(interestBtn);
+    if (iAmIn) row.appendChild(buildPlusOneStepper(o, myInterest));
+    primary.appendChild(row);
   } else {
+    const row = document.createElement("div");
+    row.style.cssText = "display:flex;gap:10px;flex-wrap:wrap;align-items:center";
     const interestBtn = document.createElement("button");
     interestBtn.className = "btn secondary";
     interestBtn.textContent = iAmIn ? "Je ne peux pas" : "Je viens";
     interestBtn.onclick = ()=> toggleInterest(o, iAmIn);
-    primary.appendChild(interestBtn);
+    row.appendChild(interestBtn);
+    if (iAmIn) row.appendChild(buildPlusOneStepper(o, myInterest));
+    primary.appendChild(row);
   }
 
   const pollSection = document.getElementById("d-poll-section");
@@ -2374,6 +2419,57 @@ async function toggleInterest(o, wasIn){
       toast("Erreur : " + error.message);
       return;
     }
+  }
+  await loadAllData();
+  if (state.currentOutingId === o.id) renderDetailModal();
+  renderCurrentView();
+}
+
+function buildPlusOneStepper(o, myInterest){
+  if (o.max_plus_ones === 0) return document.createComment("plus-ones-disabled");
+  const current = myInterest?.plus_ones || 0;
+  const max = (o.max_plus_ones === null || o.max_plus_ones === undefined) ? Infinity : o.max_plus_ones;
+
+  const wrap = document.createElement("div");
+  wrap.className = "plus-one-stepper";
+
+  const minusBtn = document.createElement("button");
+  minusBtn.type = "button";
+  minusBtn.textContent = "–";
+  minusBtn.setAttribute("aria-label", "Retirer un +1");
+  minusBtn.disabled = current <= 0;
+  minusBtn.onclick = ()=> changePlusOnes(o, current - 1);
+
+  const countEl = document.createElement("span");
+  countEl.className = "count";
+  countEl.textContent = "+" + current;
+
+  const plusBtn = document.createElement("button");
+  plusBtn.type = "button";
+  plusBtn.textContent = "+";
+  plusBtn.setAttribute("aria-label", "Ajouter un +1");
+  plusBtn.disabled = current >= max;
+  plusBtn.onclick = ()=> changePlusOnes(o, current + 1);
+
+  wrap.appendChild(minusBtn);
+  wrap.appendChild(countEl);
+  wrap.appendChild(plusBtn);
+  return wrap;
+}
+
+async function changePlusOnes(o, newValue){
+  vibrate(10);
+  const idx = state.interests.findIndex(i=>i.outing_id===o.id && i.user_id===state.profile.id);
+  if (idx === -1) return;
+  const prevValue = state.interests[idx].plus_ones || 0;
+  state.interests[idx].plus_ones = newValue;
+  renderDetailModal();
+  const { error } = await sb.from("interests").update({ plus_ones: newValue }).eq("outing_id", o.id).eq("user_id", state.profile.id);
+  if (error){
+    state.interests[idx].plus_ones = prevValue;
+    renderDetailModal();
+    toast("Erreur : " + error.message);
+    return;
   }
   await loadAllData();
   if (state.currentOutingId === o.id) renderDetailModal();
