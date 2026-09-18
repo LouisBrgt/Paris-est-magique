@@ -1195,21 +1195,42 @@ function renderDetailModal(){
     const maxVotes = Math.max(0, ...voteCounts);
     slots.forEach(s=>{
       const votes = state.pollVotes.filter(v=>v.slot_id===s.id);
-      const mine = votes.some(v=>v.user_id===state.profile.id);
+      const myVote = votes.find(v=>v.user_id===state.profile.id);
+      const mine = !!myVote;
       const isWinning = maxVotes > 0 && votes.length === maxVotes;
       const row = document.createElement("div");
       row.className = "slot-row";
-      row.innerHTML = `<span>${isWinning ? "🏆 " : ""}${new Date(s.starts_at).toLocaleString("fr-FR",{dateStyle:"medium", timeStyle:"short"})} (${votes.length})</span>`;
+      row.style.cssText = "flex-wrap:wrap;align-items:flex-start";
+
+      const label = document.createElement("span");
+      label.textContent = `${isWinning ? "🏆 " : ""}${new Date(s.starts_at).toLocaleString("fr-FR",{dateStyle:"medium", timeStyle:"short"})} (${votes.length})`;
+      row.appendChild(label);
 
       const actions = document.createElement("div");
-      actions.style.cssText = "display:flex;gap:6px";
+      actions.style.cssText = "display:flex;gap:6px;align-items:center";
+
+      const commentInput = document.createElement("input");
+      commentInput.type = "text";
+      commentInput.placeholder = "Commentaire (optionnel)";
+      commentInput.value = myVote?.comment || "";
+      commentInput.style.cssText = "font-size:12px;padding:4px 6px;border:1px solid var(--line);border-radius:3px;width:130px";
 
       const btn = document.createElement("button");
       btn.className = "vote" + (mine ? " mine" : "");
       btn.textContent = mine ? "Je suis dispo ✓" : "Je suis dispo";
       btn.onclick = async ()=>{
         if (mine) await sb.from("poll_votes").delete().eq("slot_id", s.id).eq("user_id", state.profile.id);
-        else await sb.from("poll_votes").insert({ slot_id: s.id, user_id: state.profile.id });
+        else await sb.from("poll_votes").insert({ slot_id: s.id, user_id: state.profile.id, comment: commentInput.value.trim() || null });
+        await loadAllData(); renderDetailModal();
+      };
+
+      const saveCommentBtn = document.createElement("button");
+      saveCommentBtn.className = "vote";
+      saveCommentBtn.textContent = "💾";
+      saveCommentBtn.title = "Enregistrer le commentaire";
+      saveCommentBtn.style.display = mine ? "" : "none";
+      saveCommentBtn.onclick = async ()=>{
+        await sb.from("poll_votes").update({ comment: commentInput.value.trim() || null }).eq("slot_id", s.id).eq("user_id", state.profile.id);
         await loadAllData(); renderDetailModal();
       };
 
@@ -1223,9 +1244,19 @@ function renderDetailModal(){
         toast("Date retenue pour la sortie.");
       };
 
+      actions.appendChild(commentInput);
       actions.appendChild(btn);
+      actions.appendChild(saveCommentBtn);
       actions.appendChild(pickBtn);
       row.appendChild(actions);
+
+      if (votes.length){
+        const votersEl = document.createElement("div");
+        votersEl.style.cssText = "font-size:11px;color:var(--ink-soft);width:100%;margin-top:4px";
+        votersEl.textContent = votes.map(v=> nameFor(v.user_id) + (v.comment ? ` (${v.comment})` : "")).join(", ");
+        row.appendChild(votersEl);
+      }
+
       slotsEl.appendChild(row);
     });
   } else {
