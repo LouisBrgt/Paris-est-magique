@@ -110,6 +110,23 @@ button{font-family:inherit}
   font-size:20px;border-radius:50%;
 }
 .icon-btn:hover{background:var(--line)}
+.icon-btn-wrap{position:relative}
+.notif-badge{
+  position:absolute;top:2px;right:2px;background:var(--danger);color:#fff;border-radius:999px;
+  font-size:10px;font-weight:700;min-width:16px;height:16px;display:flex;align-items:center;justify-content:center;
+  padding:0 4px;pointer-events:none;
+}
+.notif-badge.hidden{display:none}
+.notif-item{
+  display:block;width:100%;text-align:left;background:none;border:none;cursor:pointer;
+  padding:10px;border-radius:8px;font-size:13px;color:var(--ink);min-height:44px;
+}
+.notif-item:hover{background:var(--bg)}
+.notif-item.unread{background:color-mix(in srgb, var(--accent-soft) 12%, transparent)}
+.notif-item .n-msg{font-weight:600;margin-bottom:2px}
+.notif-item .n-date{font-size:11px;color:var(--ink-soft)}
+#notif-panel{width:300px;max-width:85vw;max-height:70vh;overflow-y:auto}
+#notif-empty{font-size:13px;color:var(--ink-soft);padding:10px}
 
 /* ---- champs ---- */
 .field{margin-bottom:14px}
@@ -292,6 +309,12 @@ nav.tabs button.active{color:var(--accent-ink);background:var(--accent)}
 .cal-chip{
   font-size:11px;padding:3px 6px;border-radius:6px;margin-bottom:3px;cursor:pointer;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--accent-ink);font-weight:600;min-height:22px;
+}
+.cal-chip-tentative{
+  opacity:.4;border:1px dashed var(--accent-ink);background:transparent !important;
+}
+.cal-chip-leading{
+  outline:1px solid var(--accent-ink);
 }
 .ideas-side{width:260px;border-left:1px solid var(--line);padding-left:20px}
 .ideas-side h3{font-size:14px;margin:0 0 10px;color:var(--ink-soft);font-weight:700;font-family:'Inter',sans-serif}
@@ -491,6 +514,17 @@ button.vote.mine{background:var(--accent-soft);border-color:var(--accent-soft);c
 <div id="app" class="hidden">
   <header class="top">
     <p class="wordmark">+1</p>
+    <div style="display:flex;align-items:center;gap:4px">
+    <div class="dropdown icon-btn-wrap">
+      <button class="icon-btn" id="notif-btn" aria-haspopup="menu" aria-expanded="false" aria-label="Notifications">
+        🔔
+        <span class="notif-badge hidden" id="notif-badge">0</span>
+      </button>
+      <div class="dropdown-menu hidden" id="notif-panel" role="menu" aria-label="Notifications">
+        <div id="notif-list"></div>
+        <p id="notif-empty" class="hidden">Aucune notification pour l'instant.</p>
+      </div>
+    </div>
     <div class="dropdown">
       <button class="who" id="profile-menu-btn" aria-haspopup="menu" aria-expanded="false" aria-label="Menu du profil">
         <img id="me-avatar" src="" alt="" />
@@ -509,6 +543,7 @@ button.vote.mine{background:var(--accent-soft);border-color:var(--accent-soft);c
         <button type="button" id="admin-btn" role="menuitem" class="hidden">🛠️ Administration</button>
         <button type="button" id="logout-btn" role="menuitem">Se déconnecter</button>
       </div>
+    </div>
     </div>
   </header>
 
@@ -607,10 +642,31 @@ button.vote.mine{background:var(--accent-soft);border-color:var(--accent-soft);c
         </div>
         <p id="geocode-status" style="font-size:12px;color:var(--ink-soft);margin:6px 0 0"></p>
       </div>
-      <div class="field">
+      <div class="field" id="o-date-mode-field">
+        <span style="display:block;font-size:13px;color:var(--ink-soft);margin-bottom:5px;font-weight:600">Type de sortie</span>
+        <div class="pill-row" id="o-date-mode-picker" role="radiogroup" aria-label="Date fixe ou période">
+          <button type="button" class="cat-pill visibility-pill" data-date-mode="fixe" aria-pressed="true">📅 Date fixe</button>
+          <button type="button" class="cat-pill visibility-pill" data-date-mode="periode" aria-pressed="false">↔️ Période</button>
+        </div>
+        <input type="hidden" id="o-date-mode" value="fixe" />
+      </div>
+
+      <div class="field" id="o-fixed-date-field">
         <label for="o-date">Date (optionnel, sinon reste une idée)</label>
         <input type="datetime-local" id="o-date" />
       </div>
+
+      <div class="field hidden" id="o-period-fields">
+        <div class="row2">
+          <div class="field"><label for="o-period-start">Du</label><input type="date" id="o-period-start" /></div>
+          <div class="field"><label for="o-period-end">Au</label><input type="date" id="o-period-end" /></div>
+        </div>
+        <div id="o-period-first-day-field">
+          <label for="o-period-first-day">Ton jour proposé</label>
+          <input type="date" id="o-period-first-day" />
+        </div>
+      </div>
+
       <div class="field" id="o-visibility-field">
         <span style="display:block;font-size:13px;color:var(--ink-soft);margin-bottom:5px;font-weight:600">Visibilité</span>
         <div class="pill-row" id="o-visibility-picker" role="radiogroup" aria-label="Visibilité de la sortie">
@@ -706,11 +762,12 @@ button.vote.mine{background:var(--accent-soft);border-color:var(--accent-soft);c
     <div id="d-primary-area" class="primary-action"></div>
 
     <div id="d-poll-section" class="hidden">
-      <h3 style="font-size:14px;margin:0 0 8px">Sondage de dispos</h3>
+      <h3 style="font-size:14px;margin:0 0 8px" id="d-poll-title">Quel jour ?</h3>
+      <p style="font-size:12px;color:var(--ink-soft);margin:0 0 10px" id="d-poll-hint"></p>
       <div id="d-poll-slots"></div>
       <div style="display:flex;gap:8px;margin-top:10px">
-        <input type="datetime-local" id="d-new-slot" style="flex:1" aria-label="Nouveau créneau" />
-        <button class="btn secondary" id="d-add-slot">Ajouter</button>
+        <input id="d-new-slot" style="flex:1" aria-label="Proposer un autre jour" />
+        <button class="btn secondary" id="d-add-slot">Proposer</button>
       </div>
     </div>
 
@@ -920,12 +977,13 @@ let state = {
   avatarUrls: {},
   outings: [],
   interests: [],
-  pollSlots: [],
-  pollVotes: [],
+  dayOptions: [],
+  dayVotes: [],
   reviews: [],
   comments: [],
   friendships: [],
   outingInvitees: [],
+  notifications: [],
   view: (function(){ try { return localStorage.getItem("sortiesView") || "calendar"; } catch(e){ return "calendar"; } })(),
   filters: {
     cats: storedFilters?.cats || CATEGORIES.slice(),
@@ -995,6 +1053,7 @@ function setupDropdown(btnId, menuId){
 }
 setupDropdown("profile-menu-btn", "profile-menu");
 setupDropdown("d-menu-btn", "d-menu");
+setupDropdown("notif-btn", "notif-panel");
 document.addEventListener("click", ()=>{
   document.querySelectorAll(".dropdown-menu").forEach(m=>m.classList.add("hidden"));
   document.querySelectorAll("[aria-haspopup='menu']").forEach(b=>b.setAttribute("aria-expanded","false"));
@@ -1436,33 +1495,36 @@ async function boot(){
 }
 
 async function fetchAllData(){
-  const [{data: profiles}, {data: outings}, {data: interests}, {data: slots}, {data: votes}, {data: reviews}, {data: comments}, {data: friendships}, {data: invitees}] = await Promise.all([
+  const [{data: profiles}, {data: outings}, {data: interests}, {data: dayOptions}, {data: dayVotes}, {data: reviews}, {data: comments}, {data: friendships}, {data: invitees}, {data: notifications}] = await Promise.all([
     sb.from("profiles").select("*"),
     sb.from("outings").select("*").order("start_at", { ascending: true }),
     sb.from("interests").select("*"),
-    sb.from("poll_slots").select("*"),
-    sb.from("poll_votes").select("*"),
+    sb.from("event_day_options").select("*"),
+    sb.from("event_day_votes").select("*"),
     sb.from("reviews").select("*"),
     sb.from("comments").select("*").order("created_at", { ascending: true }),
     sb.from("friendships").select("*"),
-    sb.from("outing_invitees").select("*")
+    sb.from("outing_invitees").select("*"),
+    sb.from("notifications").select("*").order("created_at", { ascending: false })
   ]);
   state.profiles = {};
   (profiles||[]).forEach(p => state.profiles[p.id] = p);
   state.outings = outings || [];
   state.interests = interests || [];
-  state.pollSlots = slots || [];
-  state.pollVotes = votes || [];
+  state.dayOptions = dayOptions || [];
+  state.dayVotes = dayVotes || [];
   state.reviews = reviews || [];
   state.comments = comments || [];
   state.friendships = friendships || [];
   state.outingInvitees = invitees || [];
+  state.notifications = notifications || [];
   await preloadAvatars();
 }
 
 async function loadAllData(){
   await fetchAllData();
   await runAutomations();
+  renderNotifications();
 }
 
 /* ============================================================
@@ -1470,9 +1532,6 @@ async function loadAllData(){
    ============================================================ */
 async function runAutomations(){
   await autoMarkPastOutingsAsDone();
-  state.outings
-    .filter(o=> !o.archived_at && o.status !== "planifiee" && o.status !== "faite")
-    .forEach(maybeAutoResolvePoll);
 }
 
 async function autoMarkPastOutingsAsDone(){
@@ -1490,35 +1549,27 @@ async function autoMarkPastOutingsAsDone(){
   showToast(`"${first.title}" est passée en terminé`, "Laisser un avis", ()=> openDetail(first.id), 5000);
 }
 
-function maybeAutoResolvePoll(o){
-  if (o.start_at) return;
-  const slots = state.pollSlots.filter(s=>s.outing_id===o.id);
-  if (!slots.length) return;
-  const interested = state.interests.filter(i=>i.outing_id===o.id);
-  if (interested.length < 2) return;
-  for (const s of slots){
-    const voters = new Set(state.pollVotes.filter(v=>v.slot_id===s.id).map(v=>v.user_id));
-    const allInterestedVoted = interested.every(i=> voters.has(i.user_id));
-    if (allInterestedVoted && voters.size === interested.length){
-      autoResolvePollTo(o, s);
-      return;
-    }
-  }
+/* ============================================================
+   JOUR EN TETE (evenements a periode et a date indeterminee)
+   ============================================================ */
+function dateOnlyToLocalDate(dateStr){
+  return new Date(dateStr + "T12:00:00");
 }
 
-async function autoResolvePollTo(o, slot){
-  const prevStartAt = o.start_at, prevStatus = o.status;
-  const { error } = await sb.from("outings").update({ start_at: slot.starts_at, status: "planifiee" }).eq("id", o.id).is("start_at", null);
-  if (error) return;
-  await fetchAllData();
-  renderCurrentView();
-  if (state.currentOutingId === o.id) renderDetailModal();
-  const dateLabel = new Date(slot.starts_at).toLocaleString("fr-FR", { dateStyle:"medium", timeStyle:"short" });
-  showToast(`Date fixée au ${dateLabel}`, "Annuler", async ()=>{
-    await sb.from("outings").update({ start_at: prevStartAt, status: prevStatus }).eq("id", o.id);
-    await loadAllData(); renderCurrentView();
-    if (state.currentOutingId === o.id) renderDetailModal();
-  }, 5000);
+function computeLeadingDayOptionId(o, options, votes){
+  if (!options.length) return null;
+  let best = null, bestCount = -1;
+  for (const opt of options){
+    const count = votes.filter(v=>v.option_id===opt.id).length;
+    if (count > bestCount){
+      best = opt; bestCount = count;
+    } else if (count === bestCount && best){
+      const bestIsCreator = best.proposed_by === o.created_by;
+      const optIsCreator = opt.proposed_by === o.created_by;
+      if (!bestIsCreator && optIsCreator) best = opt;
+    }
+  }
+  return best ? best.id : null;
 }
 
 async function preloadAvatars(){
@@ -1550,6 +1601,62 @@ function renderMe(){
   document.getElementById("admin-btn").classList.toggle("hidden", !isAdmin());
 }
 
+/* ============================================================
+   CENTRE DE NOTIFICATIONS PERSISTANT
+   ============================================================ */
+const NOTIF_MESSAGES = {
+  new_event: (o)=> `🆕 Nouvelle sortie : ${o ? o.title : "une sortie"}`,
+  leading_day_change: (o)=> `↔️ Le jour en tête a changé pour "${o ? o.title : "une sortie"}"`,
+  final_confirmation: (o)=> `📅 Jour confirmé pour "${o ? o.title : "une sortie"}"`
+};
+
+function notificationMessage(n){
+  const o = state.outings.find(x=>x.id===n.outing_id);
+  const fn = NOTIF_MESSAGES[n.type];
+  return fn ? fn(o) : (o ? o.title : "Notification");
+}
+
+function renderNotifications(){
+  const list = document.getElementById("notif-list");
+  const empty = document.getElementById("notif-empty");
+  const badge = document.getElementById("notif-badge");
+  if (!list || !badge) return;
+  const mine = state.notifications;
+  const unreadCount = mine.filter(n=>!n.read_at).length;
+  badge.textContent = unreadCount > 9 ? "9+" : String(unreadCount);
+  badge.classList.toggle("hidden", unreadCount === 0);
+
+  list.innerHTML = "";
+  mine.forEach(n=>{
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "notif-item" + (!n.read_at ? " unread" : "");
+    btn.setAttribute("role", "menuitem");
+    const msg = document.createElement("div");
+    msg.className = "n-msg";
+    msg.textContent = notificationMessage(n);
+    const dateEl = document.createElement("div");
+    dateEl.className = "n-date";
+    dateEl.textContent = new Date(n.created_at).toLocaleString("fr-FR", { dateStyle:"short", timeStyle:"short" });
+    btn.appendChild(msg);
+    btn.appendChild(dateEl);
+    btn.onclick = ()=> openNotification(n);
+    list.appendChild(btn);
+  });
+  empty.classList.toggle("hidden", mine.length > 0);
+}
+
+async function openNotification(n){
+  document.getElementById("notif-panel").classList.add("hidden");
+  document.getElementById("notif-btn").setAttribute("aria-expanded", "false");
+  if (!n.read_at){
+    n.read_at = new Date().toISOString();
+    renderNotifications();
+    await sb.from("notifications").update({ read_at: n.read_at }).eq("id", n.id);
+  }
+  if (n.outing_id) openDetail(n.outing_id);
+}
+
 function notify(msg){
   toast(msg);
   if ("Notification" in window && Notification.permission === "granted"){
@@ -1560,9 +1667,6 @@ function notify(msg){
 function handleRealtimeChange(payload){
   const { table, eventType, new: newRow, old: oldRow } = payload;
   if (!newRow) return;
-  if (table === "outings" && eventType === "UPDATE" && !oldRow.start_at && newRow.start_at){
-    notify(`📅 Date fixée pour "${newRow.title}" !`);
-  }
   if (table === "interests" && eventType === "INSERT" && newRow.user_id !== state.profile?.id){
     const outing = state.outings.find(o=>o.id===newRow.outing_id);
     notify(`🔥 ${nameFor(newRow.user_id)} vient à "${outing ? outing.title : "une sortie"}"`);
@@ -1572,6 +1676,9 @@ function handleRealtimeChange(payload){
     if (outing){
       notify(`${nameFor(outing.created_by)} te propose : ${outing.title}`);
     }
+  }
+  if (table === "notifications" && eventType === "INSERT" && newRow.user_id === state.profile?.id){
+    notify(notificationMessage(newRow));
   }
 }
 
@@ -1747,6 +1854,15 @@ function renderCalendar(){
   const totalCells = Math.ceil((startOffset+daysInMonth)/7)*7;
 
   const outings = filteredOutings().filter(o=>o.start_at);
+  const periodOutings = filteredOutings().filter(o=>!o.start_at && o.date_mode==="periode" && o.period_start && o.period_end);
+  const periodLeadingDate = {};
+  periodOutings.forEach(o=>{
+    const dayOptions = state.dayOptions.filter(d=>d.outing_id===o.id);
+    const dayVotes = state.dayVotes.filter(v=>v.outing_id===o.id);
+    const leadingId = o.current_leading_day_option_id || computeLeadingDayOptionId(o, dayOptions, dayVotes);
+    const leadingOpt = leadingId ? dayOptions.find(d=>d.id===leadingId) : null;
+    periodLeadingDate[o.id] = leadingOpt ? leadingOpt.option_at.slice(0,10) : null;
+  });
   const today = new Date();
 
   for (let i=0;i<totalCells;i++){
@@ -1782,13 +1898,25 @@ function renderCalendar(){
         chip.addEventListener("click", (e)=>{ e.stopPropagation(); openDetail(o.id); });
         cell.appendChild(chip);
       });
+
+      const cellDateStr = `${cellDate.getFullYear()}-${String(cellDate.getMonth()+1).padStart(2,"0")}-${String(cellDate.getDate()).padStart(2,"0")}`;
+      periodOutings.filter(o=> cellDateStr >= o.period_start && cellDateStr <= o.period_end).forEach(o=>{
+        const isLeadingDay = periodLeadingDate[o.id] === cellDateStr;
+        const chip = document.createElement("div");
+        chip.className = "cal-chip" + (isLeadingDay ? " cal-chip-leading" : " cal-chip-tentative");
+        chip.style.background = CATEGORY_COLORS[o.category] || "#888";
+        chip.textContent = (isLeadingDay ? "🏆 " : "") + (o.emoji ? o.emoji + " " : "") + o.title + visibilityBadge(o);
+        chip.title = isLeadingDay ? "Jour en tête (pas encore confirmé)" : "Fait partie de la période proposée";
+        chip.addEventListener("click", (e)=>{ e.stopPropagation(); openDetail(o.id); });
+        cell.appendChild(chip);
+      });
     }
     grid.appendChild(cell);
   }
 
   const ideasList = document.getElementById("ideas-list");
   ideasList.innerHTML = "";
-  const ideas = filteredOutings().filter(o=>!o.start_at && o.status==="idee");
+  const ideas = filteredOutings().filter(o=>!o.start_at && o.status==="idee" && o.date_mode!=="periode");
   if (ideas.length===0){
     ideasList.innerHTML = `<p style="font-size:13px;color:var(--ink-soft)">Aucune idée pour l'instant.</p>`;
   }
@@ -1885,6 +2013,19 @@ document.getElementById("o-category").addEventListener("change", (e)=>{
   if (!state.emojiManuallySet) selectEmoji(CATEGORY_EMOJI[e.target.value] || "", false);
 });
 
+/* ---- mode de date (fixe / periode) ---- */
+function setDateMode(value){
+  document.getElementById("o-date-mode").value = value;
+  document.querySelectorAll("#o-date-mode-picker .visibility-pill").forEach(btn=>{
+    btn.setAttribute("aria-pressed", String(btn.dataset.dateMode === value));
+  });
+  document.getElementById("o-fixed-date-field").classList.toggle("hidden", value === "periode");
+  document.getElementById("o-period-fields").classList.toggle("hidden", value !== "periode");
+}
+document.querySelectorAll("#o-date-mode-picker .visibility-pill").forEach(btn=>{
+  btn.addEventListener("click", ()=> setDateMode(btn.dataset.dateMode));
+});
+
 /* ---- visibilite & invites ---- */
 const VISIBILITY_HINTS = {
   public: "Visible par tout le groupe.",
@@ -1948,6 +2089,9 @@ function openCreateModal(prefill){
   document.getElementById("o-max-plus-ones-field").classList.remove("hidden");
   selectedInvitees = new Set();
   setVisibility("public");
+  document.getElementById("o-date-mode-field").classList.remove("hidden");
+  document.getElementById("o-period-first-day-field").classList.remove("hidden");
+  setDateMode("fixe");
 
   const defaultCat = document.getElementById("o-category").value;
   selectEmoji(CATEGORY_EMOJI[defaultCat] || "", false);
@@ -1988,6 +2132,15 @@ function openEditModal(o){
     setVisibility(o.visibility || "public");
     document.getElementById("o-max-plus-ones").value = (o.max_plus_ones === null || o.max_plus_ones === undefined) ? "" : String(o.max_plus_ones);
   }
+
+  // Le type de sortie (date fixe / période) n'est plus modifiable après création :
+  // on affiche juste les bons champs, sans le sélecteur, et sans le champ "jour proposé"
+  // (les jours se proposent depuis la fiche détail une fois la sortie créée).
+  document.getElementById("o-date-mode-field").classList.add("hidden");
+  document.getElementById("o-period-first-day-field").classList.add("hidden");
+  setDateMode(o.date_mode === "periode" ? "periode" : "fixe");
+  document.getElementById("o-period-start").value = o.period_start || "";
+  document.getElementById("o-period-end").value = o.period_end || "";
 
   document.getElementById("detail-modal").classList.add("hidden");
   modal.classList.remove("hidden");
@@ -2070,13 +2223,35 @@ document.getElementById("outing-form").addEventListener("submit", async (e)=>{
   const modal = document.getElementById("outing-modal");
   const dateVal = document.getElementById("o-date").value;
   const editingId = state.editingOutingId;
+  const dateMode = document.getElementById("o-date-mode").value === "periode" ? "periode" : "fixe";
+  const periodStart = document.getElementById("o-period-start").value || null;
+  const periodEnd = document.getElementById("o-period-end").value || null;
+  const periodFirstDay = document.getElementById("o-period-first-day").value;
 
-  let status;
-  if (editingId){
-    const orig = state.outings.find(x=>x.id===editingId);
-    status = (orig && orig.status === "faite") ? "faite" : (dateVal ? "planifiee" : "idee");
+  if (dateMode === "periode"){
+    if (!periodStart || !periodEnd){ toast("Renseigne le début et la fin de la période."); return; }
+    if (periodStart > periodEnd){ toast("La date de fin doit être après la date de début."); return; }
+    if (!editingId){
+      if (!periodFirstDay){ toast("Propose ton premier jour dans la période."); return; }
+      if (periodFirstDay < periodStart || periodFirstDay > periodEnd){ toast("Ton jour proposé doit être dans la période."); return; }
+    }
+  }
+
+  let status, start_at;
+  if (dateMode === "periode"){
+    // La date n'est jamais fixée depuis ce formulaire pour une période : elle ne bouge
+    // que via le vote de jour + la confirmation manuelle du créateur sur la fiche détail.
+    const orig = editingId ? state.outings.find(x=>x.id===editingId) : null;
+    start_at = orig ? orig.start_at : null;
+    status = orig ? orig.status : "idee";
   } else {
-    status = dateVal ? "planifiee" : "idee";
+    start_at = dateVal ? new Date(dateVal).toISOString() : null;
+    if (editingId){
+      const orig = state.outings.find(x=>x.id===editingId);
+      status = (orig && orig.status === "faite") ? "faite" : (dateVal ? "planifiee" : "idee");
+    } else {
+      status = dateVal ? "planifiee" : "idee";
+    }
   }
 
   const outingId = editingId || crypto.randomUUID();
@@ -2094,8 +2269,11 @@ document.getElementById("outing-form").addEventListener("submit", async (e)=>{
     address: document.getElementById("o-address").value.trim() || null,
     lat: modal.dataset.lat ? parseFloat(modal.dataset.lat) : null,
     lng: modal.dataset.lng ? parseFloat(modal.dataset.lng) : null,
-    start_at: dateVal ? new Date(dateVal).toISOString() : null,
-    status
+    start_at,
+    status,
+    date_mode: dateMode,
+    period_start: dateMode === "periode" ? periodStart : null,
+    period_end: dateMode === "periode" ? periodEnd : null
   };
   if (visibilityFieldVisible) payload.max_plus_ones = maxPlusOnesRaw === "" ? null : parseInt(maxPlusOnesRaw, 10);
   if (visibilityFieldVisible) payload.visibility = visibility;
@@ -2109,6 +2287,15 @@ document.getElementById("outing-form").addEventListener("submit", async (e)=>{
     ({ error } = await sb.from("outings").insert(payload));
   }
   if (error){ toast("Erreur : " + error.message); return; }
+
+  if (!editingId && dateMode === "periode"){
+    const { error: optionError } = await sb.from("event_day_options").insert({
+      outing_id: outingId,
+      option_at: new Date(periodFirstDay + "T00:00:00").toISOString(),
+      proposed_by: state.user.id
+    });
+    if (optionError) toast("Sortie enregistrée, mais erreur sur le jour proposé : " + optionError.message);
+  }
 
   if (visibilityFieldVisible){
     const previousInviteeIds = editingId
@@ -2178,7 +2365,7 @@ function buildDetailMenu(o){
     menu.appendChild(btn);
   };
   addItem("✏️ Modifier la sortie", ()=> openEditModal(o));
-  if (!o.start_at){
+  if (!o.start_at && o.date_mode !== "periode"){
     addItem("📅 Planifier une date", ()=>{
       document.getElementById("d-plan-inline").classList.remove("hidden");
       document.getElementById("d-plan-date").focus();
@@ -2266,8 +2453,6 @@ function renderDetailModal(){
   const primary = document.getElementById("d-primary-area");
   primary.innerHTML = "";
 
-  const hasSlots = state.pollSlots.some(s=>s.outing_id===o.id);
-
   if (o.status === "faite"){
     const wrap = document.createElement("div");
     const label = document.createElement("p");
@@ -2304,7 +2489,8 @@ function renderDetailModal(){
     if (iAmIn) row.appendChild(buildPlusOneStepper(o, myInterest));
     row.appendChild(icsBtn);
     primary.appendChild(row);
-  } else if (!hasSlots){
+  } else if (o.date_mode !== "periode"){
+    // Idée à date fixe, pas encore de date : Oui/Non classique.
     const row = document.createElement("div");
     row.style.cssText = "display:flex;gap:10px;flex-wrap:wrap;align-items:center";
     const interestBtn = document.createElement("button");
@@ -2314,30 +2500,30 @@ function renderDetailModal(){
     row.appendChild(interestBtn);
     if (iAmIn) row.appendChild(buildPlusOneStepper(o, myInterest));
     primary.appendChild(row);
-  } else {
-    const row = document.createElement("div");
-    row.style.cssText = "display:flex;gap:10px;flex-wrap:wrap;align-items:center";
-    const interestBtn = document.createElement("button");
-    interestBtn.className = "btn secondary";
-    interestBtn.textContent = iAmIn ? "Je ne peux pas" : "Je viens";
-    interestBtn.onclick = ()=> toggleInterest(o, iAmIn);
-    row.appendChild(interestBtn);
-    if (iAmIn) row.appendChild(buildPlusOneStepper(o, myInterest));
-    primary.appendChild(row);
   }
+  // Sinon (idée à période, pas encore de jour confirmé) : pas de bouton "Je viens" ici,
+  // voter pour un jour ci-dessous vaut participation (voir renderDayOptions/voteForDay).
 
   const pollSection = document.getElementById("d-poll-section");
-  if (!o.start_at && hasSlots){
+  if (!o.start_at && o.date_mode === "periode"){
     pollSection.classList.remove("hidden");
-    renderPollSlots(o);
+    const dayOptions = state.dayOptions.filter(d=>d.outing_id===o.id);
+    const dayVotes = state.dayVotes.filter(v=>v.outing_id===o.id);
+    const leadingOptionId = o.current_leading_day_option_id || computeLeadingDayOptionId(o, dayOptions, dayVotes);
+    renderDayOptions(o, dayOptions, dayVotes, leadingOptionId);
   } else {
     pollSection.classList.add("hidden");
   }
   document.getElementById("d-add-slot").onclick = async ()=>{
-    const val = document.getElementById("d-new-slot").value;
+    const input = document.getElementById("d-new-slot");
+    const val = input.value;
     if (!val) return;
-    await sb.from("poll_slots").insert({ outing_id:o.id, starts_at: new Date(val).toISOString(), created_by: state.profile.id });
-    document.getElementById("d-new-slot").value = "";
+    if (o.period_start && val < o.period_start){ toast("Ce jour est avant le début de la période."); return; }
+    if (o.period_end && val > o.period_end){ toast("Ce jour est après la fin de la période."); return; }
+    const optionAt = new Date(val + "T00:00:00").toISOString();
+    const { error } = await sb.from("event_day_options").insert({ outing_id:o.id, option_at: optionAt, proposed_by: state.profile.id });
+    if (error){ toast("Erreur : " + error.message); return; }
+    input.value = "";
     await loadAllData(); renderDetailModal();
   };
 
@@ -2476,18 +2662,22 @@ async function changePlusOnes(o, newValue){
   renderCurrentView();
 }
 
-function renderPollSlots(o){
-  const slots = state.pollSlots.filter(s=>s.outing_id===o.id).sort((a,b)=> new Date(a.starts_at)-new Date(b.starts_at));
+function renderDayOptions(o, dayOptions, dayVotes, leadingOptionId){
+  const iAmCreator = o.created_by === state.profile.id;
+
+  document.getElementById("d-poll-title").textContent = "Quel jour dans la période ?";
+  document.getElementById("d-poll-hint").textContent =
+    `Vote pour un jour entre le ${dateOnlyToLocalDate(o.period_start).toLocaleDateString("fr-FR",{dateStyle:"medium"})} et le ${dateOnlyToLocalDate(o.period_end).toLocaleDateString("fr-FR",{dateStyle:"medium"})}. Le jour en tête peut encore changer jusqu'à la confirmation.`;
+
+  const options = dayOptions.slice().sort((a,b)=> new Date(a.option_at) - new Date(b.option_at));
   const slotsEl = document.getElementById("d-poll-slots");
   slotsEl.innerHTML = "";
-  const voteCounts = slots.map(s=> state.pollVotes.filter(v=>v.slot_id===s.id).length);
-  const maxVotes = Math.max(0, ...voteCounts);
+  const myVote = dayVotes.find(v=>v.user_id===state.profile.id);
 
-  slots.forEach(s=>{
-    const votes = state.pollVotes.filter(v=>v.slot_id===s.id);
-    const myVote = votes.find(v=>v.user_id===state.profile.id);
-    const mine = !!myVote;
-    const isWinning = maxVotes > 0 && votes.length === maxVotes;
+  options.forEach(opt=>{
+    const votes = dayVotes.filter(v=>v.option_id===opt.id);
+    const mine = myVote?.option_id === opt.id;
+    const isLeading = opt.id === leadingOptionId;
 
     const row = document.createElement("div");
     row.className = "slot-row";
@@ -2496,94 +2686,99 @@ function renderPollSlots(o){
     top.className = "slot-top";
     const label = document.createElement("span");
     label.className = "slot-label";
-    label.textContent = `${isWinning ? "🏆 " : ""}${new Date(s.starts_at).toLocaleString("fr-FR",{dateStyle:"medium", timeStyle:"short"})} (${votes.length})`;
+    const dateLabel = dateOnlyToLocalDate(opt.option_at.slice(0,10)).toLocaleDateString("fr-FR",{ weekday:"long", day:"numeric", month:"long" });
+    label.textContent = `${isLeading ? "🏆 " : ""}${dateLabel} (${votes.length})`;
     top.appendChild(label);
 
     const actions = document.createElement("div");
     actions.className = "slot-actions";
 
-    const commentInput = document.createElement("input");
-    commentInput.type = "text";
-    commentInput.className = "slot-comment-input";
-    commentInput.placeholder = "Commentaire (optionnel)";
-    commentInput.setAttribute("aria-label", "Commentaire sur ta disponibilité");
-    commentInput.value = myVote?.comment || "";
-
     const btn = document.createElement("button");
     btn.className = "vote" + (mine ? " mine" : "");
-    btn.textContent = mine ? "Je suis dispo ✓" : "Je suis dispo";
-    btn.onclick = ()=> toggleVote(o, s, mine, commentInput.value.trim());
-
-    const saveCommentBtn = document.createElement("button");
-    saveCommentBtn.className = "vote";
-    saveCommentBtn.textContent = "💾";
-    saveCommentBtn.title = "Enregistrer le commentaire";
-    saveCommentBtn.setAttribute("aria-label", "Enregistrer le commentaire");
-    saveCommentBtn.style.display = mine ? "" : "none";
-    saveCommentBtn.onclick = async ()=>{
-      await sb.from("poll_votes").update({ comment: commentInput.value.trim() || null }).eq("slot_id", s.id).eq("user_id", state.profile.id);
-      await loadAllData(); renderDetailModal();
-    };
-
-    const pickBtn = document.createElement("button");
-    pickBtn.className = "vote";
-    pickBtn.textContent = "Retenir cette date";
-    pickBtn.onclick = async ()=>{
-      const { error } = await sb.from("outings").update({ start_at: s.starts_at, status: "planifiee" }).eq("id", o.id);
-      if (error){ toast("Erreur : " + error.message); return; }
-      await loadAllData(); renderDetailModal(); renderCurrentView();
-      toast("Date retenue pour la sortie.");
-    };
-
-    actions.appendChild(commentInput);
+    btn.textContent = mine ? "Mon choix ✓" : "Voter pour ce jour";
+    btn.onclick = ()=> voteForDay(o, opt, mine);
     actions.appendChild(btn);
-    actions.appendChild(saveCommentBtn);
-    actions.appendChild(pickBtn);
+
+    if (iAmCreator){
+      const confirmBtn = document.createElement("button");
+      confirmBtn.className = "vote";
+      confirmBtn.textContent = "Confirmer ce jour";
+      confirmBtn.onclick = ()=> confirmDayOption(o, opt);
+      actions.appendChild(confirmBtn);
+    }
+
     row.appendChild(top);
     row.appendChild(actions);
 
     if (votes.length){
       const votersEl = document.createElement("div");
       votersEl.className = "slot-voters";
-      votersEl.textContent = votes.map(v=> nameFor(v.user_id) + (v.comment ? ` (${v.comment})` : "")).join(", ");
+      votersEl.textContent = votes.map(v=> nameFor(v.user_id)).join(", ");
       row.appendChild(votersEl);
     }
 
     slotsEl.appendChild(row);
   });
+
+  if (!options.length){
+    const empty = document.createElement("p");
+    empty.style.cssText = "font-size:13px;color:var(--ink-soft);margin:0";
+    empty.textContent = "Aucun jour proposé pour l'instant.";
+    slotsEl.appendChild(empty);
+  }
+
+  const newSlotInput = document.getElementById("d-new-slot");
+  newSlotInput.type = "date";
+  if (o.period_start) newSlotInput.min = o.period_start; else newSlotInput.removeAttribute("min");
+  if (o.period_end) newSlotInput.max = o.period_end; else newSlotInput.removeAttribute("max");
 }
 
-async function toggleVote(o, slot, wasVoting, comment){
+async function voteForDay(o, opt, wasMine){
   vibrate(15);
-  if (wasVoting){
-    const idx = state.pollVotes.findIndex(v=>v.slot_id===slot.id && v.user_id===state.profile.id);
-    const removed = idx !== -1 ? state.pollVotes.splice(idx,1)[0] : null;
-    renderDetailModal();
-    const { error } = await sb.from("poll_votes").delete().eq("slot_id", slot.id).eq("user_id", state.profile.id);
+  const voteIdx = state.dayVotes.findIndex(v=>v.outing_id===o.id && v.user_id===state.profile.id);
+  const prevVote = voteIdx !== -1 ? { ...state.dayVotes[voteIdx] } : null;
+  const interestIdx = state.interests.findIndex(i=>i.outing_id===o.id && i.user_id===state.profile.id);
+  const prevInterest = interestIdx !== -1 ? { ...state.interests[interestIdx] } : null;
+
+  if (wasMine){
+    if (voteIdx !== -1) state.dayVotes.splice(voteIdx, 1);
+    if (interestIdx !== -1) state.interests.splice(interestIdx, 1);
+    renderDetailModal(); renderCurrentView();
+    const { error } = await sb.from("event_day_votes").delete().eq("outing_id", o.id).eq("user_id", state.profile.id);
     if (error){
-      if (removed) state.pollVotes.push(removed);
-      renderDetailModal();
+      await loadAllData();
+      if (state.currentOutingId === o.id) renderDetailModal();
+      renderCurrentView();
       toast("Erreur : " + error.message);
       return;
     }
-    showToast("Vote retiré", "Annuler", async ()=>{
-      await sb.from("poll_votes").insert({ slot_id: slot.id, user_id: state.profile.id, comment: comment || null });
-      await loadAllData(); renderDetailModal();
-    }, 5000);
   } else {
-    state.pollVotes.push({ slot_id: slot.id, user_id: state.profile.id, comment: comment || null });
-    renderDetailModal();
-    const { error } = await sb.from("poll_votes").insert({ slot_id: slot.id, user_id: state.profile.id, comment: comment || null });
+    if (prevVote){
+      state.dayVotes[voteIdx].option_id = opt.id;
+    } else {
+      state.dayVotes.push({ outing_id: o.id, user_id: state.profile.id, option_id: opt.id });
+    }
+    if (!prevInterest) state.interests.push({ outing_id: o.id, user_id: state.profile.id, plus_ones: 0 });
+    renderDetailModal(); renderCurrentView();
+    const { error } = await sb.from("event_day_votes").upsert({ outing_id: o.id, user_id: state.profile.id, option_id: opt.id });
     if (error){
-      const idx = state.pollVotes.findIndex(v=>v.slot_id===slot.id && v.user_id===state.profile.id);
-      if (idx !== -1) state.pollVotes.splice(idx,1);
-      renderDetailModal();
+      await loadAllData();
+      if (state.currentOutingId === o.id) renderDetailModal();
+      renderCurrentView();
       toast("Erreur : " + error.message);
       return;
     }
   }
   await loadAllData();
   if (state.currentOutingId === o.id) renderDetailModal();
+  renderCurrentView();
+}
+
+async function confirmDayOption(o, opt){
+  const { error } = await sb.from("outings").update({ start_at: opt.option_at, status: "planifiee" }).eq("id", o.id);
+  if (error){ toast("Erreur : " + error.message); return; }
+  await loadAllData(); renderDetailModal(); renderCurrentView();
+  toast("Jour confirmé pour la sortie.");
 }
 
 function renderComments(o){
