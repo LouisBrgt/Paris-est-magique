@@ -295,11 +295,11 @@ nav.tabs button.active{color:var(--accent-ink);background:var(--accent)}
 .cal-main{flex:1;min-width:280px}
 .cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
 .cal-head .month-label{font-family:'Fraunces',serif;font-style:italic;font-size:19px}
-.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);border-top:1px solid var(--line);border-left:1px solid var(--line);border-radius:10px;overflow:hidden}
-.cal-dow{font-size:11px;color:var(--ink-soft);text-align:center;padding:8px 0;border-right:1px solid var(--line);border-bottom:1px solid var(--line);background:var(--bg-elevated)}
+.cal-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));border-top:1px solid var(--line);border-left:1px solid var(--line);border-radius:10px;overflow:hidden}
+.cal-dow{font-size:11px;color:var(--ink-soft);text-align:center;padding:8px 0;border-right:1px solid var(--line);border-bottom:1px solid var(--line);background:var(--bg-elevated);min-width:0}
 .cal-cell{
-  min-height:88px;border-right:1px solid var(--line);border-bottom:1px solid var(--line);
-  padding:5px;font-size:12px;background:var(--bg-elevated);cursor:pointer;
+  min-height:88px;min-width:0;border-right:1px solid var(--line);border-bottom:1px solid var(--line);
+  padding:5px;font-size:12px;background:var(--bg-elevated);cursor:pointer;overflow:hidden;
 }
 .cal-cell:hover{background:var(--bg)}
 .cal-cell.out-month{background:transparent;color:var(--ink-soft);cursor:default}
@@ -311,7 +311,7 @@ nav.tabs button.active{color:var(--accent-ink);background:var(--accent)}
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--accent-ink);font-weight:600;min-height:22px;
 }
 .cal-chip-tentative{
-  opacity:.4;border:1px dashed var(--accent-ink);background:transparent !important;
+  background:transparent !important;border:1px dashed var(--ink-soft);color:var(--ink-soft);font-weight:600;
 }
 .cal-chip-leading{
   outline:1px solid var(--accent-ink);
