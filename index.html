@@ -440,6 +440,15 @@ button.vote.mine{background:var(--accent-soft);border-color:var(--accent-soft);c
 .link-box{display:flex;gap:8px}
 .link-box input{flex:1;font-size:13px}
 
+/* ---- carte a partager (a screenshoter) ---- */
+.share-card{border-radius:16px;overflow:hidden;border:1px solid var(--line);background:var(--bg-elevated);margin-bottom:16px}
+.share-card-top{padding:28px 20px 20px;text-align:center;color:#fff}
+.share-card-emoji{font-size:48px;line-height:1;margin-bottom:8px}
+.share-card-title{font-size:20px;font-weight:700;font-family:'Fraunces',serif}
+.share-card-body{padding:16px 20px 4px}
+.share-card-line{font-size:14px;margin-bottom:10px;color:var(--ink)}
+.share-card-brand{text-align:center;font-size:13px;color:var(--ink-soft);padding-bottom:16px;font-family:'Fraunces',serif;font-style:italic}
+
 /* ---- bottom sheet (fiche detail, mobile) ---- */
 @media (max-width:720px){
   #detail-modal.overlay{align-items:flex-end;padding:0}
@@ -732,6 +741,11 @@ button.vote.mine{background:var(--accent-soft);border-color:var(--accent-soft);c
               <option value="3">€€€</option>
             </select>
           </div>
+          <div class="field hidden" id="o-reminder-field">
+            <label for="o-reminder">Rappel avant l'événement</label>
+            <input type="datetime-local" id="o-reminder" />
+            <p style="font-size:12px;color:var(--ink-soft);margin:6px 0 0">Par défaut, la veille à 18h. Modifiable si besoin.</p>
+          </div>
           <div class="field"><label for="o-desc">Description</label><textarea id="o-desc" rows="2"></textarea></div>
           <div class="field"><label for="o-url">Lien</label><input id="o-url" placeholder="https://" /></div>
         </div>
@@ -894,6 +908,29 @@ button.vote.mine{background:var(--accent-soft);border-color:var(--accent-soft);c
   </div>
 </div>
 
+<!-- ================= MODALE : carte a partager ================= -->
+<div id="share-modal" class="overlay hidden">
+  <div class="modal">
+    <div class="modal-head">
+      <h2>Partager</h2>
+      <button class="icon-btn" data-close aria-label="Fermer">×</button>
+    </div>
+    <p style="font-size:13px;color:var(--ink-soft);margin:0 0 14px">Fais une capture d'écran de cette carte pour la partager, ou copie le lien.</p>
+    <div class="share-card" id="share-card">
+      <div class="share-card-top" id="share-card-top">
+        <div class="share-card-emoji" id="share-card-emoji"></div>
+        <div class="share-card-title" id="share-card-title"></div>
+      </div>
+      <div class="share-card-body" id="share-card-body"></div>
+      <div class="share-card-brand">+1</div>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn secondary" id="share-card-copy">🔗 Copier le lien</button>
+      <button class="btn secondary hidden" id="share-card-native">📤 Partager…</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -1006,6 +1043,7 @@ let state = {
   currentOutingId: null,
   editingOutingId: null,
   emojiManuallySet: false,
+  reminderManuallySet: false,
   map: null,
   markers: []
 };
@@ -1585,6 +1623,16 @@ function dateOnlyToLocalDate(dateStr){
   return new Date(dateStr + "T12:00:00");
 }
 
+/* ============================================================
+   RAPPELS AVANT L'EVENEMENT
+   ============================================================ */
+function computeDefaultReminderAt(startAtIso){
+  const d = new Date(startAtIso);
+  const reminder = new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1, 18, 0, 0, 0);
+  if (reminder <= new Date()) return null; // trop tard pour un rappel utile
+  return reminder.toISOString();
+}
+
 function computeLeadingDayOptionId(o, options, votes){
   if (!options.length) return null;
   let best = null, bestCount = -1;
@@ -1636,7 +1684,15 @@ function renderMe(){
 const NOTIF_MESSAGES = {
   new_event: (o)=> `🆕 Nouvelle sortie : ${o ? o.title : "une sortie"}`,
   leading_day_change: (o)=> `↔️ Le jour en tête a changé pour "${o ? o.title : "une sortie"}"`,
-  final_confirmation: (o)=> `📅 Jour confirmé pour "${o ? o.title : "une sortie"}"`
+  final_confirmation: (o)=> `📅 Jour confirmé pour "${o ? o.title : "une sortie"}"`,
+  reminder: (o)=>{
+    if (!o || !o.start_at) return "⏰ Rappel de sortie";
+    const d = new Date(o.start_at);
+    const dateStr = d.toLocaleDateString("fr-FR", { weekday:"long", day:"numeric", month:"long" });
+    const timeStr = d.toLocaleTimeString("fr-FR", { hour:"2-digit", minute:"2-digit" });
+    return `⏰ ${o.title} — ${dateStr} à ${timeStr}${o.address ? " · " + o.address : ""}`;
+  },
+  period_ending_soon: (o)=> `⏳ Période bientôt terminée pour "${o ? o.title : "une sortie"}", jour pas encore fixé`
 };
 
 function notificationMessage(n){
@@ -2112,10 +2168,24 @@ function setDateMode(value){
   });
   document.getElementById("o-fixed-date-field").classList.toggle("hidden", value === "periode");
   document.getElementById("o-period-fields").classList.toggle("hidden", value !== "periode");
+  refreshReminderField();
 }
 document.querySelectorAll("#o-date-mode-picker .visibility-pill").forEach(btn=>{
   btn.addEventListener("click", ()=> setDateMode(btn.dataset.dateMode));
 });
+
+/* ---- rappel avant l'evenement (optionnel, propose par defaut la veille a 18h) ---- */
+function refreshReminderField(){
+  const dateVal = document.getElementById("o-date").value;
+  const isFixe = document.getElementById("o-date-mode").value !== "periode";
+  document.getElementById("o-reminder-field").classList.toggle("hidden", !(isFixe && dateVal));
+  if (isFixe && dateVal && !state.reminderManuallySet){
+    const defaultReminder = computeDefaultReminderAt(new Date(dateVal).toISOString());
+    document.getElementById("o-reminder").value = defaultReminder ? toDatetimeLocal(defaultReminder) : "";
+  }
+}
+document.getElementById("o-date").addEventListener("input", refreshReminderField);
+document.getElementById("o-reminder").addEventListener("input", ()=>{ state.reminderManuallySet = true; });
 
 /* ---- visibilite & invites ---- */
 const VISIBILITY_HINTS = {
@@ -2168,6 +2238,7 @@ function toDatetimeLocal(dateOrIso){
 function openCreateModal(prefill){
   state.editingOutingId = null;
   state.emojiManuallySet = false;
+  state.reminderManuallySet = false;
   document.getElementById("outing-modal-title").textContent = "Proposer une sortie";
   document.getElementById("outing-form").reset();
   document.getElementById("more-details").open = false;
@@ -2190,6 +2261,7 @@ function openCreateModal(prefill){
   if (prefill?.date) document.getElementById("o-date").value = toDatetimeLocal(prefill.date);
   if (prefill?.address) document.getElementById("o-address").value = prefill.address;
   if (prefill?.lat != null){ modal.dataset.lat = prefill.lat; modal.dataset.lng = prefill.lng; }
+  refreshReminderField();
 
   modal.classList.remove("hidden");
   document.getElementById("o-title").focus();
@@ -2214,6 +2286,8 @@ function openEditModal(o){
   modal.dataset.lat = (o.lat !== null && o.lat !== undefined) ? o.lat : "";
   modal.dataset.lng = (o.lng !== null && o.lng !== undefined) ? o.lng : "";
   document.getElementById("o-date").value = o.start_at ? toDatetimeLocal(o.start_at) : "";
+  document.getElementById("o-reminder").value = o.reminder_at ? toDatetimeLocal(o.reminder_at) : "";
+  state.reminderManuallySet = !!o.reminder_at;
 
   const iAmCreator = o.created_by === state.profile.id;
   document.getElementById("o-visibility-field").classList.toggle("hidden", !iAmCreator);
@@ -2330,29 +2404,52 @@ document.getElementById("outing-form").addEventListener("submit", async (e)=>{
     }
   }
 
-  let status, start_at;
+  const orig = editingId ? state.outings.find(x=>x.id===editingId) : null;
+
+  let status, start_at, reminderAt, reminderSentAt, periodEndingNotifiedAt;
   if (dateMode === "periode"){
     // La date n'est jamais fixée depuis ce formulaire pour une période : elle ne bouge
     // que via le vote de jour + la confirmation manuelle du créateur sur la fiche détail.
-    const orig = editingId ? state.outings.find(x=>x.id===editingId) : null;
     const wasAlreadyPeriode = orig ? orig.date_mode === "periode" : false;
     if (wasAlreadyPeriode){
-      // Déjà en période : on ne touche pas à un jour en cours de vote ou déjà confirmé.
+      // Déjà en période : on ne touche pas à un jour en cours de vote ou déjà confirmé,
+      // ni aux rappels qui lui sont associés.
       start_at = orig.start_at;
       status = orig.status;
+      reminderAt = orig.reminder_at;
+      reminderSentAt = orig.reminder_sent_at;
+      periodEndingNotifiedAt = orig.period_ending_notified_at;
     } else {
       // Nouvelle période (création, ou bascule depuis "date fixe") : même résultat
-      // qu'une création en période, sans hériter d'une date déjà posée.
+      // qu'une création en période, sans hériter d'une date ni de rappels déjà posés.
       start_at = null;
       status = "idee";
+      reminderAt = null;
+      reminderSentAt = null;
+      periodEndingNotifiedAt = null;
     }
   } else {
     start_at = dateVal ? new Date(dateVal).toISOString() : null;
     if (editingId){
-      const orig = state.outings.find(x=>x.id===editingId);
       status = (orig && orig.status === "faite") ? "faite" : (dateVal ? "planifiee" : "idee");
     } else {
       status = dateVal ? "planifiee" : "idee";
+    }
+
+    periodEndingNotifiedAt = null;
+    const prevStartAt = orig ? orig.start_at : null;
+    if (!start_at){
+      reminderAt = null;
+      reminderSentAt = null;
+    } else if (start_at !== prevStartAt){
+      // La date a changé (ou vient d'être posée) : on (re)calcule le rappel, en respectant
+      // une éventuelle personnalisation du créateur dans "Plus de détails".
+      const customReminder = document.getElementById("o-reminder").value;
+      reminderAt = customReminder ? new Date(customReminder).toISOString() : computeDefaultReminderAt(start_at);
+      reminderSentAt = null;
+    } else {
+      reminderAt = orig.reminder_at;
+      reminderSentAt = orig.reminder_sent_at;
     }
   }
 
@@ -2375,7 +2472,10 @@ document.getElementById("outing-form").addEventListener("submit", async (e)=>{
     status,
     date_mode: dateMode,
     period_start: dateMode === "periode" ? periodStart : null,
-    period_end: dateMode === "periode" ? periodEnd : null
+    period_end: dateMode === "periode" ? periodEnd : null,
+    reminder_at: reminderAt,
+    reminder_sent_at: reminderSentAt,
+    period_ending_notified_at: periodEndingNotifiedAt
   };
   if (visibilityFieldVisible) payload.max_plus_ones = maxPlusOnesRaw === "" ? null : parseInt(maxPlusOnesRaw, 10);
   if (visibilityFieldVisible) payload.visibility = visibility;
@@ -2445,6 +2545,36 @@ document.getElementById("link-modal-copy").onclick = async ()=>{
   } catch(err){ /* selection manuelle reste possible dans le champ */ }
 };
 
+function openShareCard(o){
+  document.getElementById("share-card-emoji").textContent = o.emoji || "✨";
+  document.getElementById("share-card-top").style.background = CATEGORY_COLORS[o.category] || "#888";
+  document.getElementById("share-card-title").textContent = o.title;
+
+  const lines = [];
+  if (o.start_at){
+    const d = new Date(o.start_at);
+    lines.push(`📅 ${d.toLocaleDateString("fr-FR",{ weekday:"long", day:"numeric", month:"long" })}`);
+    lines.push(`🕗 ${d.toLocaleTimeString("fr-FR",{ hour:"2-digit", minute:"2-digit" })}`);
+  } else if (o.date_mode === "periode" && o.period_start && o.period_end){
+    // Le jour en tête n'est pas affiché ici : rien n'est figé tant que le créateur n'a pas confirmé.
+    lines.push(`📅 Du ${dateOnlyToLocalDate(o.period_start).toLocaleDateString("fr-FR",{dateStyle:"medium"})} au ${dateOnlyToLocalDate(o.period_end).toLocaleDateString("fr-FR",{dateStyle:"medium"})}`);
+  }
+  if (o.address) lines.push(`📍 ${o.address}`);
+  document.getElementById("share-card-body").innerHTML = lines.map(l=>`<div class="share-card-line">${escapeHtml(l)}</div>`).join("");
+
+  document.getElementById("share-card-copy").onclick = ()=> shareOutingLink(o);
+  const nativeBtn = document.getElementById("share-card-native");
+  if (navigator.share){
+    nativeBtn.classList.remove("hidden");
+    const link = `${location.origin}${location.pathname}#outing=${o.id}`;
+    nativeBtn.onclick = ()=> navigator.share({ title: o.title, text: o.title, url: link }).catch(()=>{});
+  } else {
+    nativeBtn.classList.add("hidden");
+  }
+
+  document.getElementById("share-modal").classList.remove("hidden");
+}
+
 /* ============================================================
    DETAIL D'UNE SORTIE
    ============================================================ */
@@ -2477,6 +2607,7 @@ function buildDetailMenu(o){
     addItem("📅 Ajouter à mon agenda", ()=> downloadIcs(o));
   }
   addItem("🔗 Copier le lien d'invitation", ()=> shareOutingLink(o));
+  addItem("📤 Partager (carte à capturer)", ()=> openShareCard(o));
   if (o.status !== "faite"){
     addItem("✅ Marquer comme faite", ()=> markOutingDone(o));
   }
@@ -2504,7 +2635,11 @@ document.getElementById("d-plan-confirm").onclick = async ()=>{
   const o = state.outings.find(x=>x.id===state.currentOutingId);
   const val = document.getElementById("d-plan-date").value;
   if (!o || !val) return;
-  const { error } = await sb.from("outings").update({ start_at: new Date(val).toISOString(), status:"planifiee" }).eq("id", o.id);
+  const start_at = new Date(val).toISOString();
+  const { error } = await sb.from("outings").update({
+    start_at, status: "planifiee",
+    reminder_at: computeDefaultReminderAt(start_at), reminder_sent_at: null
+  }).eq("id", o.id);
   if (error){ toast("Erreur : " + error.message); return; }
   document.getElementById("d-plan-inline").classList.add("hidden");
   await loadAllData(); renderDetailModal(); renderCurrentView();
@@ -2877,7 +3012,10 @@ async function voteForDay(o, opt, wasMine){
 }
 
 async function confirmDayOption(o, opt){
-  const { error } = await sb.from("outings").update({ start_at: opt.option_at, status: "planifiee" }).eq("id", o.id);
+  const { error } = await sb.from("outings").update({
+    start_at: opt.option_at, status: "planifiee",
+    reminder_at: computeDefaultReminderAt(opt.option_at), reminder_sent_at: null
+  }).eq("id", o.id);
   if (error){ toast("Erreur : " + error.message); return; }
   await loadAllData(); renderDetailModal(); renderCurrentView();
   toast("Jour confirmé pour la sortie.");
