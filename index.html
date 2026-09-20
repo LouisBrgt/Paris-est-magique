@@ -308,7 +308,8 @@ nav.tabs button.active{color:var(--accent-ink);background:var(--accent)}
 .cal-cell.today .daynum{color:var(--accent-soft);font-weight:700}
 .cal-chip{
   font-size:11px;padding:3px 6px;border-radius:6px;margin-bottom:3px;cursor:pointer;
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--accent-ink);font-weight:600;min-height:22px;
+  color:var(--accent-ink);font-weight:600;min-height:22px;line-height:1.3;
+  overflow-wrap:break-word;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden;
 }
 .cal-chip-tentative{
   background:transparent !important;border:1px dashed var(--ink-soft);color:var(--ink-soft);font-weight:600;
@@ -2133,11 +2134,12 @@ function openEditModal(o){
     document.getElementById("o-max-plus-ones").value = (o.max_plus_ones === null || o.max_plus_ones === undefined) ? "" : String(o.max_plus_ones);
   }
 
-  // Le type de sortie (date fixe / période) n'est plus modifiable après création :
-  // on affiche juste les bons champs, sans le sélecteur, et sans le champ "jour proposé"
-  // (les jours se proposent depuis la fiche détail une fois la sortie créée).
-  document.getElementById("o-date-mode-field").classList.add("hidden");
-  document.getElementById("o-period-first-day-field").classList.add("hidden");
+  document.getElementById("o-date-mode-field").classList.toggle("hidden", !iAmCreator);
+  // Si des jours ont déjà été proposés pour cette sortie, pas besoin de redemander un
+  // "premier jour" en passant en période : on garde ceux qui existent déjà.
+  const hasExistingDayOptions = state.dayOptions.some(d=>d.outing_id===o.id);
+  document.getElementById("o-period-first-day-field").classList.toggle("hidden", hasExistingDayOptions);
+  document.getElementById("o-period-first-day").value = "";
   setDateMode(o.date_mode === "periode" ? "periode" : "fixe");
   document.getElementById("o-period-start").value = o.period_start || "";
   document.getElementById("o-period-end").value = o.period_end || "";
@@ -2227,11 +2229,12 @@ document.getElementById("outing-form").addEventListener("submit", async (e)=>{
   const periodStart = document.getElementById("o-period-start").value || null;
   const periodEnd = document.getElementById("o-period-end").value || null;
   const periodFirstDay = document.getElementById("o-period-first-day").value;
+  const hasExistingDayOptions = editingId ? state.dayOptions.some(d=>d.outing_id===editingId) : false;
 
   if (dateMode === "periode"){
     if (!periodStart || !periodEnd){ toast("Renseigne le début et la fin de la période."); return; }
     if (periodStart > periodEnd){ toast("La date de fin doit être après la date de début."); return; }
-    if (!editingId){
+    if (!hasExistingDayOptions){
       if (!periodFirstDay){ toast("Propose ton premier jour dans la période."); return; }
       if (periodFirstDay < periodStart || periodFirstDay > periodEnd){ toast("Ton jour proposé doit être dans la période."); return; }
     }
@@ -2288,7 +2291,7 @@ document.getElementById("outing-form").addEventListener("submit", async (e)=>{
   }
   if (error){ toast("Erreur : " + error.message); return; }
 
-  if (!editingId && dateMode === "periode"){
+  if (dateMode === "periode" && !hasExistingDayOptions){
     const { error: optionError } = await sb.from("event_day_options").insert({
       outing_id: outingId,
       option_at: new Date(periodFirstDay + "T00:00:00").toISOString(),
