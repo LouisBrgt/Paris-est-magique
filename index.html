@@ -298,24 +298,17 @@ nav.tabs button.active{color:var(--accent-ink);background:var(--accent)}
 .cal-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));border-top:1px solid var(--line);border-left:1px solid var(--line);border-radius:10px;overflow:hidden}
 .cal-dow{font-size:11px;color:var(--ink-soft);text-align:center;padding:8px 0;border-right:1px solid var(--line);border-bottom:1px solid var(--line);background:var(--bg-elevated);min-width:0}
 .cal-cell{
-  min-height:88px;min-width:0;border-right:1px solid var(--line);border-bottom:1px solid var(--line);
-  padding:5px;font-size:12px;background:var(--bg-elevated);cursor:pointer;overflow:hidden;
+  min-height:104px;min-width:0;border-right:1px solid var(--line);border-bottom:1px solid var(--line);
+  padding:6px;font-size:12px;background:var(--bg-elevated);cursor:pointer;overflow:hidden;
 }
 .cal-cell:hover{background:var(--bg)}
 .cal-cell.out-month{background:transparent;color:var(--ink-soft);cursor:default}
 .cal-cell.out-month:hover{background:transparent}
-.cal-cell .daynum{font-size:12px;color:var(--ink-soft);margin-bottom:4px}
+.cal-cell .daynum{font-size:12px;color:var(--ink-soft);margin-bottom:5px}
 .cal-cell.today .daynum{color:var(--accent-soft);font-weight:700}
 .cal-chip{
-  font-size:11px;padding:3px 6px;border-radius:6px;margin-bottom:3px;cursor:pointer;
-  color:var(--accent-ink);font-weight:600;min-height:22px;line-height:1.3;
-  overflow-wrap:break-word;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden;
-}
-.cal-chip-tentative{
-  background:transparent !important;border:1px dashed var(--ink-soft);color:var(--ink-soft);font-weight:600;
-}
-.cal-chip-leading{
-  outline:1px solid var(--accent-ink);
+  font-size:19px;line-height:1.3;cursor:pointer;background:none;border:none;padding:0;
+  display:block;width:100%;text-align:left;
 }
 .ideas-side{width:260px;border-left:1px solid var(--line);padding-left:20px}
 .ideas-side h3{font-size:14px;margin:0 0 10px;color:var(--ink-soft);font-weight:700;font-family:'Inter',sans-serif}
@@ -326,8 +319,24 @@ nav.tabs button.active{color:var(--accent-ink);background:var(--accent)}
 .idea-card .meta{font-size:12px;color:var(--ink-soft)}
 @media (max-width:720px){
   .ideas-side{width:100%;border-left:none;border-top:1px solid var(--line);padding-left:0;padding-top:16px}
-  .cal-cell{min-height:60px}
+  .cal-cell{min-height:84px}
 }
+
+/* ---- bulle d'info calendrier (comme sur le plan) ---- */
+.cal-bubble{
+  position:fixed;z-index:80;background:var(--bg-elevated);border:1px solid var(--line);border-radius:12px;
+  padding:12px 14px;box-shadow:0 8px 24px rgba(0,0,0,.28);width:240px;max-width:calc(100vw - 20px);
+  font-size:13px;cursor:pointer;
+}
+.cal-bubble .b-title{font-weight:700;font-size:14px;margin-bottom:6px}
+.cal-bubble .b-line{color:var(--ink-soft);margin-bottom:3px}
+.cal-bubble .b-hint{font-size:11px;color:var(--ink-soft);margin-top:8px}
+.cal-bubble .b-period-track{position:relative;height:4px;background:var(--line);border-radius:2px;margin:10px 0 5px}
+.cal-bubble .b-period-dot{
+  position:absolute;top:50%;width:10px;height:10px;border-radius:50%;background:var(--accent-soft);
+  transform:translate(-50%,-50%);border:2px solid var(--bg-elevated);
+}
+.cal-bubble .b-period-labels{display:flex;justify-content:space-between;font-size:10px;color:var(--ink-soft)}
 
 /* ---- carte ---- */
 #map{height:520px;border:1px solid var(--line);border-radius:14px}
@@ -994,7 +1003,6 @@ let state = {
   },
   calMonth: new Date().getMonth(),
   calYear: new Date().getFullYear(),
-  calSelectedOutingId: null,
   currentOutingId: null,
   editingOutingId: null,
   emojiManuallySet: false,
@@ -1073,9 +1081,10 @@ document.getElementById("notif-btn").addEventListener("click", ()=>{
   menu.style.left = left + "px";
   menu.style.right = "auto";
 });
-document.addEventListener("click", ()=>{
+document.addEventListener("click", (e)=>{
   document.querySelectorAll(".dropdown-menu").forEach(m=>m.classList.add("hidden"));
   document.querySelectorAll("[aria-haspopup='menu']").forEach(b=>b.setAttribute("aria-expanded","false"));
+  if (!e.target.closest("#cal-bubble")) closeCalBubble();
 });
 
 /* ============================================================
@@ -1085,6 +1094,7 @@ document.addEventListener("keydown", (e)=>{
   if (e.key !== "Escape") return;
   document.querySelectorAll(".overlay:not(.hidden)").forEach(o=> o.classList.add("hidden"));
   document.querySelectorAll(".dropdown-menu").forEach(m=>m.classList.add("hidden"));
+  closeCalBubble();
 });
 document.querySelectorAll(".overlay").forEach(overlay=>{
   overlay.addEventListener("click", (e)=>{
@@ -1850,50 +1860,86 @@ function filteredOutings(){
    ============================================================ */
 document.getElementById("prev-month").onclick = ()=>{
   state.calMonth--; if (state.calMonth<0){ state.calMonth=11; state.calYear--; }
-  state.calSelectedOutingId = null;
   renderCalendar();
 };
 document.getElementById("next-month").onclick = ()=>{
   state.calMonth++; if (state.calMonth>11){ state.calMonth=0; state.calYear++; }
-  state.calSelectedOutingId = null;
   renderCalendar();
 };
 
-/* Pastilles du calendrier : n'affichent que l'emoji par défaut. Un 1er clic
-   affiche le nom complet et masque les autres sorties du mois (pour dégager
-   la place) ; un 2e clic sur la même sortie ouvre sa fiche détail. Cliquer
-   ailleurs (jour vide, mois suivant/précédent) réinitialise l'affichage. */
-function buildCalChip(o, variant){
-  const selected = state.calSelectedOutingId === o.id;
-  if (state.calSelectedOutingId && !selected) return null;
+/* Pastilles du calendrier : rien que l'emoji. Un clic ouvre une bulle
+   d'info (nom, date/heure ou période, lieu), comme sur le plan ; cliquer
+   dans la bulle ouvre la fiche détail complète. */
+function closeCalBubble(){
+  const existing = document.getElementById("cal-bubble");
+  if (existing) existing.remove();
+}
 
-  const chip = document.createElement("div");
-  chip.className = "cal-chip" + (variant === "leading" ? " cal-chip-leading" : variant === "tentative" ? " cal-chip-tentative" : "");
-  chip.style.background = CATEGORY_COLORS[o.category] || "#888";
-  const crown = variant === "leading" ? "🏆 " : "";
+function showCalBubble(anchorEl, o){
+  closeCalBubble();
+  const bubble = document.createElement("div");
+  bubble.id = "cal-bubble";
+  bubble.className = "cal-bubble";
 
-  if (selected){
-    chip.textContent = crown + (o.emoji ? o.emoji + " " : "") + o.title + visibilityBadge(o);
-    chip.addEventListener("click", (e)=>{
-      e.stopPropagation();
-      state.calSelectedOutingId = null;
-      renderCalendar();
-      openDetail(o.id);
-    });
-  } else {
-    chip.textContent = (crown + (o.emoji || "")).trim() || "•";
-    chip.setAttribute("aria-label", o.title);
-    chip.addEventListener("click", (e)=>{
-      e.stopPropagation();
-      state.calSelectedOutingId = o.id;
-      renderCalendar();
-    });
+  const parts = [];
+  parts.push(`<div class="b-title">${o.emoji ? escapeHtml(o.emoji) + " " : ""}${escapeHtml(o.title)}${visibilityBadge(o)}</div>`);
+
+  if (o.start_at){
+    const d = new Date(o.start_at);
+    parts.push(`<div class="b-line">📅 ${d.toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"})}</div>`);
+    parts.push(`<div class="b-line">🕗 ${d.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})}</div>`);
+  } else if (o.date_mode === "periode" && o.period_start && o.period_end){
+    parts.push(`<div class="b-line">📅 Du ${dateOnlyToLocalDate(o.period_start).toLocaleDateString("fr-FR",{dateStyle:"medium"})} au ${dateOnlyToLocalDate(o.period_end).toLocaleDateString("fr-FR",{dateStyle:"medium"})}</div>`);
   }
-  if (variant) chip.title = variant === "leading" ? "Jour en tête (pas encore confirmé)" : "Fait partie de la période proposée";
+  if (o.address){
+    parts.push(`<div class="b-line">📍 ${escapeHtml(o.address)}</div>`);
+  }
+
+  if (o.date_mode === "periode" && !o.start_at && o.period_start && o.period_end){
+    const dayOptions = state.dayOptions.filter(d=>d.outing_id===o.id);
+    const dayVotes = state.dayVotes.filter(v=>v.outing_id===o.id);
+    const leadingId = o.current_leading_day_option_id || computeLeadingDayOptionId(o, dayOptions, dayVotes);
+    const leadingOpt = leadingId ? dayOptions.find(d=>d.id===leadingId) : null;
+    const startMs = dateOnlyToLocalDate(o.period_start).getTime();
+    const endMs = dateOnlyToLocalDate(o.period_end).getTime();
+    const span = Math.max(1, endMs - startMs);
+    let pct = 0;
+    if (leadingOpt){
+      const leadMs = dateOnlyToLocalDate(leadingOpt.option_at.slice(0,10)).getTime();
+      pct = Math.min(100, Math.max(0, ((leadMs - startMs) / span) * 100));
+    }
+    parts.push(`<div class="b-period-track"><div class="b-period-dot" style="left:${pct}%"></div></div>`);
+    parts.push(`<div class="b-period-labels"><span>${dateOnlyToLocalDate(o.period_start).toLocaleDateString("fr-FR",{day:"numeric",month:"short"})}</span><span>${dateOnlyToLocalDate(o.period_end).toLocaleDateString("fr-FR",{day:"numeric",month:"short"})}</span></div>`);
+  }
+
+  parts.push(`<div class="b-hint">Touche ici pour les détails</div>`);
+  bubble.innerHTML = parts.join("");
+  bubble.addEventListener("click", (e)=>{ e.stopPropagation(); closeCalBubble(); openDetail(o.id); });
+  document.body.appendChild(bubble);
+
+  const rect = anchorEl.getBoundingClientRect();
+  const margin = 10;
+  const width = bubble.offsetWidth;
+  const height = bubble.offsetHeight;
+  let left = Math.min(rect.left, window.innerWidth - width - margin);
+  left = Math.max(left, margin);
+  let top = rect.bottom + 6;
+  if (top + height > window.innerHeight - margin) top = Math.max(margin, rect.top - height - 6);
+  bubble.style.left = left + "px";
+  bubble.style.top = top + "px";
+}
+
+function buildCalChip(o, isLeadingDay){
+  const chip = document.createElement("div");
+  chip.className = "cal-chip";
+  chip.textContent = (isLeadingDay ? "🏆" : "") + (o.emoji || "•");
+  chip.setAttribute("aria-label", o.title);
+  chip.addEventListener("click", (e)=>{ e.stopPropagation(); showCalBubble(chip, o); });
   return chip;
 }
 
 function renderCalendar(){
+  closeCalBubble();
   document.getElementById("month-label").textContent = `${MONTHS[state.calMonth]} ${state.calYear}`;
   const grid = document.getElementById("cal-grid");
   grid.innerHTML = "";
@@ -1939,26 +1985,21 @@ function renderCalendar(){
       cell.setAttribute("role", "button");
       cell.setAttribute("aria-label", `Proposer une sortie le ${cellDate.toLocaleDateString("fr-FR")}`);
       const dateForCell = cellDate;
-      const resetSelectionThenCreate = ()=>{
-        if (state.calSelectedOutingId){ state.calSelectedOutingId = null; renderCalendar(); }
-        openCreateWithDate(dateForCell);
-      };
-      cell.addEventListener("click", resetSelectionThenCreate);
-      cell.addEventListener("keydown", (e)=>{ if (e.key === "Enter" || e.key === " "){ e.preventDefault(); resetSelectionThenCreate(); } });
+      cell.addEventListener("click", ()=> openCreateWithDate(dateForCell));
+      cell.addEventListener("keydown", (e)=>{ if (e.key === "Enter" || e.key === " "){ e.preventDefault(); openCreateWithDate(dateForCell); } });
 
       outings.filter(o=>{
         const d = new Date(o.start_at);
         return d.getFullYear()===cellDate.getFullYear() && d.getMonth()===cellDate.getMonth() && d.getDate()===cellDate.getDate();
       }).forEach(o=>{
-        const chip = buildCalChip(o);
-        if (chip) cell.appendChild(chip);
+        cell.appendChild(buildCalChip(o));
       });
 
+      // Une sortie à période n'affiche qu'une seule pastille, sur son jour en tête actuel
+      // (le reste de la période se voit dans la bulle au clic, pas sur l'agenda).
       const cellDateStr = `${cellDate.getFullYear()}-${String(cellDate.getMonth()+1).padStart(2,"0")}-${String(cellDate.getDate()).padStart(2,"0")}`;
-      periodOutings.filter(o=> cellDateStr >= o.period_start && cellDateStr <= o.period_end).forEach(o=>{
-        const isLeadingDay = periodLeadingDate[o.id] === cellDateStr;
-        const chip = buildCalChip(o, isLeadingDay ? "leading" : "tentative");
-        if (chip) cell.appendChild(chip);
+      periodOutings.filter(o=> periodLeadingDate[o.id] === cellDateStr).forEach(o=>{
+        cell.appendChild(buildCalChip(o, true));
       });
     }
     grid.appendChild(cell);
