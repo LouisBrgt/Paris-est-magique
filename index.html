@@ -1055,6 +1055,23 @@ function setupDropdown(btnId, menuId){
 setupDropdown("profile-menu-btn", "profile-menu");
 setupDropdown("d-menu-btn", "d-menu");
 setupDropdown("notif-btn", "notif-panel");
+
+// Le bouton de la cloche n'est pas collé au bord droit de l'écran (l'avatar est à sa
+// droite), donc l'ancrage CSS "right:0" du panneau déborde à gauche sur mobile. On
+// recalcule sa position à l'ouverture pour qu'il reste toujours dans l'écran.
+document.getElementById("notif-btn").addEventListener("click", ()=>{
+  const menu = document.getElementById("notif-panel");
+  if (menu.classList.contains("hidden")) return;
+  const btnRect = document.getElementById("notif-btn").getBoundingClientRect();
+  const margin = 10;
+  const width = menu.offsetWidth;
+  let left = Math.min(btnRect.right - width, window.innerWidth - width - margin);
+  left = Math.max(left, margin);
+  menu.style.position = "fixed";
+  menu.style.top = (btnRect.bottom + 6) + "px";
+  menu.style.left = left + "px";
+  menu.style.right = "auto";
+});
 document.addEventListener("click", ()=>{
   document.querySelectorAll(".dropdown-menu").forEach(m=>m.classList.add("hidden"));
   document.querySelectorAll("[aria-haspopup='menu']").forEach(b=>b.setAttribute("aria-expanded","false"));
