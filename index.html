@@ -994,6 +994,7 @@ let state = {
   },
   calMonth: new Date().getMonth(),
   calYear: new Date().getFullYear(),
+  calSelectedOutingId: null,
   currentOutingId: null,
   editingOutingId: null,
   emojiManuallySet: false,
@@ -1849,12 +1850,48 @@ function filteredOutings(){
    ============================================================ */
 document.getElementById("prev-month").onclick = ()=>{
   state.calMonth--; if (state.calMonth<0){ state.calMonth=11; state.calYear--; }
+  state.calSelectedOutingId = null;
   renderCalendar();
 };
 document.getElementById("next-month").onclick = ()=>{
   state.calMonth++; if (state.calMonth>11){ state.calMonth=0; state.calYear++; }
+  state.calSelectedOutingId = null;
   renderCalendar();
 };
+
+/* Pastilles du calendrier : n'affichent que l'emoji par défaut. Un 1er clic
+   affiche le nom complet et masque les autres sorties du mois (pour dégager
+   la place) ; un 2e clic sur la même sortie ouvre sa fiche détail. Cliquer
+   ailleurs (jour vide, mois suivant/précédent) réinitialise l'affichage. */
+function buildCalChip(o, variant){
+  const selected = state.calSelectedOutingId === o.id;
+  if (state.calSelectedOutingId && !selected) return null;
+
+  const chip = document.createElement("div");
+  chip.className = "cal-chip" + (variant === "leading" ? " cal-chip-leading" : variant === "tentative" ? " cal-chip-tentative" : "");
+  chip.style.background = CATEGORY_COLORS[o.category] || "#888";
+  const crown = variant === "leading" ? "🏆 " : "";
+
+  if (selected){
+    chip.textContent = crown + (o.emoji ? o.emoji + " " : "") + o.title + visibilityBadge(o);
+    chip.addEventListener("click", (e)=>{
+      e.stopPropagation();
+      state.calSelectedOutingId = null;
+      renderCalendar();
+      openDetail(o.id);
+    });
+  } else {
+    chip.textContent = (crown + (o.emoji || "")).trim() || "•";
+    chip.setAttribute("aria-label", o.title);
+    chip.addEventListener("click", (e)=>{
+      e.stopPropagation();
+      state.calSelectedOutingId = o.id;
+      renderCalendar();
+    });
+  }
+  if (variant) chip.title = variant === "leading" ? "Jour en tête (pas encore confirmé)" : "Fait partie de la période proposée";
+  return chip;
+}
 
 function renderCalendar(){
   document.getElementById("month-label").textContent = `${MONTHS[state.calMonth]} ${state.calYear}`;
@@ -1902,31 +1939,26 @@ function renderCalendar(){
       cell.setAttribute("role", "button");
       cell.setAttribute("aria-label", `Proposer une sortie le ${cellDate.toLocaleDateString("fr-FR")}`);
       const dateForCell = cellDate;
-      cell.addEventListener("click", ()=> openCreateWithDate(dateForCell));
-      cell.addEventListener("keydown", (e)=>{ if (e.key === "Enter" || e.key === " "){ e.preventDefault(); openCreateWithDate(dateForCell); } });
+      const resetSelectionThenCreate = ()=>{
+        if (state.calSelectedOutingId){ state.calSelectedOutingId = null; renderCalendar(); }
+        openCreateWithDate(dateForCell);
+      };
+      cell.addEventListener("click", resetSelectionThenCreate);
+      cell.addEventListener("keydown", (e)=>{ if (e.key === "Enter" || e.key === " "){ e.preventDefault(); resetSelectionThenCreate(); } });
 
       outings.filter(o=>{
         const d = new Date(o.start_at);
         return d.getFullYear()===cellDate.getFullYear() && d.getMonth()===cellDate.getMonth() && d.getDate()===cellDate.getDate();
       }).forEach(o=>{
-        const chip = document.createElement("div");
-        chip.className = "cal-chip";
-        chip.style.background = CATEGORY_COLORS[o.category] || "#888";
-        chip.textContent = (o.emoji ? o.emoji + " " : "") + o.title + visibilityBadge(o);
-        chip.addEventListener("click", (e)=>{ e.stopPropagation(); openDetail(o.id); });
-        cell.appendChild(chip);
+        const chip = buildCalChip(o);
+        if (chip) cell.appendChild(chip);
       });
 
       const cellDateStr = `${cellDate.getFullYear()}-${String(cellDate.getMonth()+1).padStart(2,"0")}-${String(cellDate.getDate()).padStart(2,"0")}`;
       periodOutings.filter(o=> cellDateStr >= o.period_start && cellDateStr <= o.period_end).forEach(o=>{
         const isLeadingDay = periodLeadingDate[o.id] === cellDateStr;
-        const chip = document.createElement("div");
-        chip.className = "cal-chip" + (isLeadingDay ? " cal-chip-leading" : " cal-chip-tentative");
-        chip.style.background = CATEGORY_COLORS[o.category] || "#888";
-        chip.textContent = (isLeadingDay ? "🏆 " : "") + (o.emoji ? o.emoji + " " : "") + o.title + visibilityBadge(o);
-        chip.title = isLeadingDay ? "Jour en tête (pas encore confirmé)" : "Fait partie de la période proposée";
-        chip.addEventListener("click", (e)=>{ e.stopPropagation(); openDetail(o.id); });
-        cell.appendChild(chip);
+        const chip = buildCalChip(o, isLeadingDay ? "leading" : "tentative");
+        if (chip) cell.appendChild(chip);
       });
     }
     grid.appendChild(cell);
