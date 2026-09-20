@@ -2245,8 +2245,17 @@ document.getElementById("outing-form").addEventListener("submit", async (e)=>{
     // La date n'est jamais fixée depuis ce formulaire pour une période : elle ne bouge
     // que via le vote de jour + la confirmation manuelle du créateur sur la fiche détail.
     const orig = editingId ? state.outings.find(x=>x.id===editingId) : null;
-    start_at = orig ? orig.start_at : null;
-    status = orig ? orig.status : "idee";
+    const wasAlreadyPeriode = orig ? orig.date_mode === "periode" : false;
+    if (wasAlreadyPeriode){
+      // Déjà en période : on ne touche pas à un jour en cours de vote ou déjà confirmé.
+      start_at = orig.start_at;
+      status = orig.status;
+    } else {
+      // Nouvelle période (création, ou bascule depuis "date fixe") : même résultat
+      // qu'une création en période, sans hériter d'une date déjà posée.
+      start_at = null;
+      status = "idee";
+    }
   } else {
     start_at = dateVal ? new Date(dateVal).toISOString() : null;
     if (editingId){
