@@ -1929,10 +1929,10 @@ function showCalBubble(anchorEl, o){
   bubble.style.top = top + "px";
 }
 
-function buildCalChip(o, isLeadingDay){
+function buildCalChip(o){
   const chip = document.createElement("div");
   chip.className = "cal-chip";
-  chip.textContent = (isLeadingDay ? "🏆" : "") + (o.emoji || "•");
+  chip.textContent = o.emoji || "•";
   chip.setAttribute("aria-label", o.title);
   chip.addEventListener("click", (e)=>{ e.stopPropagation(); showCalBubble(chip, o); });
   return chip;
@@ -1999,7 +1999,7 @@ function renderCalendar(){
       // (le reste de la période se voit dans la bulle au clic, pas sur l'agenda).
       const cellDateStr = `${cellDate.getFullYear()}-${String(cellDate.getMonth()+1).padStart(2,"0")}-${String(cellDate.getDate()).padStart(2,"0")}`;
       periodOutings.filter(o=> periodLeadingDate[o.id] === cellDateStr).forEach(o=>{
-        cell.appendChild(buildCalChip(o, true));
+        cell.appendChild(buildCalChip(o));
       });
     }
     grid.appendChild(cell);
