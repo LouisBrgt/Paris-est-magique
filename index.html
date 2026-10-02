@@ -324,7 +324,13 @@ nav.tabs button.active{color:var(--accent-ink);background:var(--accent)}
 
 /* ---- bande "en cours" (sorties a periode sans jour fixe) ---- */
 .ongoing-band{width:100%;flex-basis:100%;margin-top:18px;padding-top:16px;border-top:1px solid var(--line)}
-.ongoing-band h3{font-size:14px;margin:0 0 10px;color:var(--ink-soft);font-weight:700;font-family:'Inter',sans-serif}
+.ongoing-toggle{
+  display:flex;align-items:center;gap:6px;background:none;border:none;padding:0;margin:0 0 10px;min-height:32px;
+  font-size:14px;color:var(--ink-soft);font-weight:700;font-family:'Inter',sans-serif;cursor:pointer;
+}
+.ongoing-toggle .chevron{font-size:11px;transition:transform .15s ease}
+.ongoing-band.collapsed .ongoing-toggle .chevron{transform:rotate(-90deg)}
+.ongoing-band.collapsed .ongoing-row{display:none}
 .ongoing-row{display:flex;gap:10px;overflow-x:auto;padding-bottom:4px;-webkit-overflow-scrolling:touch}
 .ongoing-card{
   flex:0 0 auto;width:200px;border:1px solid var(--line);background:var(--bg-elevated);border-radius:10px;
@@ -625,7 +631,9 @@ button.vote.mine{background:var(--accent-soft);border-color:var(--accent-soft);c
       <div class="cal-grid" id="cal-grid"></div>
     </div>
     <div class="ongoing-band hidden" id="ongoing-section">
-      <h3>⏳ En cours</h3>
+      <button type="button" class="ongoing-toggle" id="ongoing-toggle" aria-expanded="true" aria-controls="ongoing-list">
+        ⏳ En cours <span class="chevron" aria-hidden="true">▾</span>
+      </button>
       <div class="ongoing-row" id="ongoing-list"></div>
     </div>
   </div>
@@ -1975,6 +1983,11 @@ document.getElementById("prev-month").onclick = ()=>{
 document.getElementById("next-month").onclick = ()=>{
   state.calMonth++; if (state.calMonth>11){ state.calMonth=0; state.calYear++; }
   renderCalendar();
+};
+document.getElementById("ongoing-toggle").onclick = ()=>{
+  const section = document.getElementById("ongoing-section");
+  const collapsed = section.classList.toggle("collapsed");
+  document.getElementById("ongoing-toggle").setAttribute("aria-expanded", String(!collapsed));
 };
 
 /* Jour du calendrier : juste un chiffre (nombre de sorties). Un clic ouvre une
