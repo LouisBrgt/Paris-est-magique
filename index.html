@@ -601,14 +601,6 @@ button.vote.mine{background:var(--accent-soft);border-color:var(--accent-soft);c
     <div id="filters-panel" class="hidden">
       <div class="pill-row" id="cat-pill-row" role="group" aria-label="Filtrer par catégorie"></div>
       <div class="filters-row-controls">
-        <label for="budget-filter">Budget
-          <select id="budget-filter" style="margin-left:6px">
-            <option value="">Tout budget</option>
-            <option value="1">€</option>
-            <option value="2">€€</option>
-            <option value="3">€€€</option>
-          </select>
-        </label>
         <span class="check-row">
           <input type="checkbox" id="show-done" />
           <label for="show-done" style="margin:0;font-weight:400">Afficher les sorties faites</label>
@@ -762,14 +754,6 @@ button.vote.mine{background:var(--accent-soft);border-color:var(--accent-soft);c
               <option value="2">2</option>
               <option value="3">3</option>
               <option value="">Illimité</option>
-            </select>
-          </div>
-          <div class="field"><label for="o-budget">Budget</label>
-            <select id="o-budget">
-              <option value="">-</option>
-              <option value="1">€</option>
-              <option value="2">€€</option>
-              <option value="3">€€€</option>
             </select>
           </div>
           <div class="field hidden" id="o-reminder-field">
@@ -1065,7 +1049,6 @@ let state = {
   view: (function(){ try { return localStorage.getItem("sortiesView") || "calendar"; } catch(e){ return "calendar"; } })(),
   filters: {
     cats: storedFilters?.cats || CATEGORIES.slice(),
-    budget: storedFilters?.budget || "",
     showDone: storedFilters?.showDone || false,
     onlyPrivate: storedFilters?.onlyPrivate || false
   },
@@ -1930,14 +1913,13 @@ function updateFilterPillsUI(){
 }
 function updateFiltersBadge(){
   const offCats = CATEGORIES.length - state.filters.cats.length;
-  const count = offCats + (state.filters.budget ? 1 : 0) + (state.filters.showDone ? 1 : 0) + (state.filters.onlyPrivate ? 1 : 0);
+  const count = offCats + (state.filters.showDone ? 1 : 0) + (state.filters.onlyPrivate ? 1 : 0);
   const badge = document.getElementById("filters-badge");
   badge.textContent = String(count);
   badge.classList.toggle("hidden", count === 0);
 }
 function restoreFiltersUI(){
   updateFilterPillsUI();
-  document.getElementById("budget-filter").value = state.filters.budget;
   document.getElementById("show-done").checked = state.filters.showDone;
   document.getElementById("only-private").checked = state.filters.onlyPrivate;
   updateFiltersBadge();
@@ -1948,10 +1930,6 @@ document.getElementById("filters-toggle").addEventListener("click", ()=>{
   const willOpen = panel.classList.contains("hidden");
   panel.classList.toggle("hidden");
   document.getElementById("filters-toggle").setAttribute("aria-expanded", String(willOpen));
-});
-document.getElementById("budget-filter").addEventListener("change", (e)=>{
-  state.filters.budget = e.target.value;
-  persistFilters(); updateFiltersBadge(); renderCurrentView();
 });
 document.getElementById("show-done").addEventListener("change", (e)=>{
   state.filters.showDone = e.target.checked;
@@ -1966,7 +1944,6 @@ function filteredOutings(){
   return state.outings.filter(o=>{
     if (o.archived_at) return false;
     if (!state.filters.cats.includes(o.category)) return false;
-    if (state.filters.budget && String(o.budget) !== state.filters.budget) return false;
     if (o.status === "faite" && !state.filters.showDone) return false;
     if (state.filters.onlyPrivate && (o.visibility || "public") === "public") return false;
     return true;
@@ -2366,7 +2343,6 @@ function openEditModal(o){
   document.getElementById("more-details").open = false;
   document.getElementById("o-title").value = o.title || "";
   document.getElementById("o-category").value = o.category || "resto";
-  document.getElementById("o-budget").value = o.budget || "";
   selectEmoji(o.emoji || "", true);
   document.getElementById("o-desc").value = o.description || "";
   document.getElementById("o-url").value = o.url || "";
@@ -2551,7 +2527,6 @@ document.getElementById("outing-form").addEventListener("submit", async (e)=>{
   const payload = {
     title: document.getElementById("o-title").value.trim(),
     category: document.getElementById("o-category").value,
-    budget: document.getElementById("o-budget").value || null,
     emoji: document.getElementById("o-emoji").value || null,
     description: document.getElementById("o-desc").value.trim() || null,
     url: document.getElementById("o-url").value.trim() || null,
@@ -2742,10 +2717,9 @@ function renderDetailModal(){
   document.getElementById("d-plan-inline").classList.add("hidden");
 
   const statusLabel = { idee:"Idée", planifiee:"Planifiée", faite:"Faite" }[o.status];
-  const budgetLabel = o.budget ? "€".repeat(o.budget) : "";
   const dateLabel = o.start_at ? new Date(o.start_at).toLocaleString("fr-FR", { dateStyle:"full", timeStyle:"short" }) : "Pas encore de date";
   document.getElementById("d-meta").innerHTML =
-    `<span class="status-badge">${statusLabel}</span>${CATEGORY_EMOJI[o.category]||""} ${CATEGORY_LABELS[o.category]||o.category} ${budgetLabel ? "· "+budgetLabel : ""}<br/>${dateLabel}${o.address ? "<br/>"+escapeHtml(o.address) : ""}<br/>Proposée par ${escapeHtml(nameFor(o.created_by))}`;
+    `<span class="status-badge">${statusLabel}</span>${CATEGORY_EMOJI[o.category]||""} ${CATEGORY_LABELS[o.category]||o.category}<br/>${dateLabel}${o.address ? "<br/>"+escapeHtml(o.address) : ""}<br/>Proposée par ${escapeHtml(nameFor(o.created_by))}`;
 
   document.getElementById("d-desc").textContent = o.description || "";
   document.getElementById("d-url").innerHTML = o.url ? `<a href="${escapeAttr(o.url)}" target="_blank" rel="noopener">${escapeHtml(o.url)}</a>` : "";
