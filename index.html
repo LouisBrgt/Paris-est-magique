@@ -331,9 +331,9 @@ nav.tabs button.active{color:var(--accent-ink);background:var(--accent)}
 .ongoing-toggle .chevron{font-size:11px;transition:transform .15s ease}
 .ongoing-band.collapsed .ongoing-toggle .chevron{transform:rotate(-90deg)}
 .ongoing-band.collapsed .ongoing-row{display:none}
-.ongoing-row{display:flex;gap:10px;overflow-x:auto;padding-bottom:4px;-webkit-overflow-scrolling:touch}
+.ongoing-row{display:flex;flex-direction:column;gap:10px;max-height:360px;overflow-y:auto;padding-bottom:4px;-webkit-overflow-scrolling:touch}
 .ongoing-card{
-  flex:0 0 auto;width:200px;border:1px solid var(--line);background:var(--bg-elevated);border-radius:10px;
+  width:100%;border:1px solid var(--line);background:var(--bg-elevated);border-radius:10px;
   padding:12px;cursor:pointer;min-height:44px;
 }
 .ongoing-card.ending-soon{border-color:var(--danger);background:color-mix(in srgb, var(--danger) 8%, var(--bg-elevated))}
