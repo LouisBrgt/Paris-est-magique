@@ -571,6 +571,7 @@ button.vote.mine{background:var(--accent-soft);border-color:var(--accent-soft);c
 
   <nav class="tabs desktop-only">
     <button id="tab-cal" class="active" aria-current="page">Calendrier</button>
+    <button id="tab-ideas">Idées</button>
     <button id="tab-map">Plan</button>
   </nav>
 
@@ -597,6 +598,10 @@ button.vote.mine{background:var(--accent-soft);border-color:var(--accent-soft);c
           <input type="checkbox" id="only-private" />
           <label for="only-private" style="margin:0;font-weight:400">Mes sorties privées</label>
         </span>
+        <span class="check-row">
+          <input type="checkbox" id="only-ongoing" />
+          <label for="only-ongoing" style="margin:0;font-weight:400">⏳ En cours</label>
+        </span>
       </div>
     </div>
   </div>
@@ -610,7 +615,14 @@ button.vote.mine{background:var(--accent-soft);border-color:var(--accent-soft);c
       </div>
       <div class="cal-grid" id="cal-grid"></div>
     </div>
-    <div class="ideas-side">
+    <div class="ideas-side hidden" id="ongoing-section">
+      <h3>Sorties à période en cours</h3>
+      <div id="ongoing-list"></div>
+    </div>
+  </div>
+
+  <div id="view-ideas" class="hidden">
+    <div class="ideas-side" style="width:100%;border:none;padding:0">
       <h3>Idées sans date</h3>
       <div id="ideas-list"></div>
     </div>
@@ -624,6 +636,7 @@ button.vote.mine{background:var(--accent-soft);border-color:var(--accent-soft);c
 
 <nav class="bottom-nav hidden" aria-label="Navigation principale">
   <button id="tab-cal-mobile" class="active" aria-current="page"><span class="bn-icon" aria-hidden="true">📅</span>Calendrier</button>
+  <button id="tab-ideas-mobile"><span class="bn-icon" aria-hidden="true">💡</span>Idées</button>
   <button id="tab-map-mobile"><span class="bn-icon" aria-hidden="true">🗺️</span>Plan</button>
 </nav>
 
@@ -1037,7 +1050,8 @@ let state = {
     cats: storedFilters?.cats || CATEGORIES.slice(),
     budget: storedFilters?.budget || "",
     showDone: storedFilters?.showDone || false,
-    onlyPrivate: storedFilters?.onlyPrivate || false
+    onlyPrivate: storedFilters?.onlyPrivate || false,
+    onlyOngoing: storedFilters?.onlyOngoing || false
   },
   calMonth: new Date().getMonth(),
   calYear: new Date().getFullYear(),
@@ -1790,19 +1804,27 @@ function setView(view){
   renderCurrentView();
 }
 document.getElementById("tab-cal").onclick = ()=> setView("calendar");
+document.getElementById("tab-ideas").onclick = ()=> setView("ideas");
 document.getElementById("tab-map").onclick = ()=> setView("map");
 document.getElementById("tab-cal-mobile").onclick = ()=> setView("calendar");
+document.getElementById("tab-ideas-mobile").onclick = ()=> setView("ideas");
 document.getElementById("tab-map-mobile").onclick = ()=> setView("map");
 
 function renderCurrentView(){
   const isCal = state.view === "calendar";
+  const isIdeas = state.view === "ideas";
+  const isMap = state.view === "map";
   document.getElementById("tab-cal").classList.toggle("active", isCal);
-  document.getElementById("tab-map").classList.toggle("active", !isCal);
+  document.getElementById("tab-ideas").classList.toggle("active", isIdeas);
+  document.getElementById("tab-map").classList.toggle("active", isMap);
   document.getElementById("tab-cal-mobile").classList.toggle("active", isCal);
-  document.getElementById("tab-map-mobile").classList.toggle("active", !isCal);
+  document.getElementById("tab-ideas-mobile").classList.toggle("active", isIdeas);
+  document.getElementById("tab-map-mobile").classList.toggle("active", isMap);
   document.getElementById("view-calendar").classList.toggle("hidden", !isCal);
-  document.getElementById("view-map").classList.toggle("hidden", isCal);
+  document.getElementById("view-ideas").classList.toggle("hidden", !isIdeas);
+  document.getElementById("view-map").classList.toggle("hidden", !isMap);
   if (isCal) renderCalendar();
+  else if (isIdeas) renderIdeasView();
   else renderMap();
   renderNextOutingBanner();
 }
@@ -1869,7 +1891,7 @@ function updateFilterPillsUI(){
 }
 function updateFiltersBadge(){
   const offCats = CATEGORIES.length - state.filters.cats.length;
-  const count = offCats + (state.filters.budget ? 1 : 0) + (state.filters.showDone ? 1 : 0) + (state.filters.onlyPrivate ? 1 : 0);
+  const count = offCats + (state.filters.budget ? 1 : 0) + (state.filters.showDone ? 1 : 0) + (state.filters.onlyPrivate ? 1 : 0) + (state.filters.onlyOngoing ? 1 : 0);
   const badge = document.getElementById("filters-badge");
   badge.textContent = String(count);
   badge.classList.toggle("hidden", count === 0);
@@ -1879,6 +1901,7 @@ function restoreFiltersUI(){
   document.getElementById("budget-filter").value = state.filters.budget;
   document.getElementById("show-done").checked = state.filters.showDone;
   document.getElementById("only-private").checked = state.filters.onlyPrivate;
+  document.getElementById("only-ongoing").checked = state.filters.onlyOngoing;
   updateFiltersBadge();
 }
 
@@ -1898,6 +1921,10 @@ document.getElementById("show-done").addEventListener("change", (e)=>{
 });
 document.getElementById("only-private").addEventListener("change", (e)=>{
   state.filters.onlyPrivate = e.target.checked;
+  persistFilters(); updateFiltersBadge(); renderCurrentView();
+});
+document.getElementById("only-ongoing").addEventListener("change", (e)=>{
+  state.filters.onlyOngoing = e.target.checked;
   persistFilters(); updateFiltersBadge(); renderCurrentView();
 });
 
@@ -1987,15 +2014,6 @@ function renderCalendar(){
   const totalCells = Math.ceil((startOffset+daysInMonth)/7)*7;
 
   const outings = filteredOutings().filter(o=>o.start_at);
-  const periodOutings = filteredOutings().filter(o=>!o.start_at && o.date_mode==="periode" && o.period_start && o.period_end);
-  const periodLeadingDate = {};
-  periodOutings.forEach(o=>{
-    const dayOptions = state.dayOptions.filter(d=>d.outing_id===o.id);
-    const dayVotes = state.dayVotes.filter(v=>v.outing_id===o.id);
-    const leadingId = o.current_leading_day_option_id || computeLeadingDayOptionId(o, dayOptions, dayVotes);
-    const leadingOpt = leadingId ? dayOptions.find(d=>d.id===leadingId) : null;
-    periodLeadingDate[o.id] = leadingOpt ? leadingOpt.option_at.slice(0,10) : null;
-  });
   const today = new Date();
 
   for (let i=0;i<totalCells;i++){
@@ -2013,16 +2031,12 @@ function renderCalendar(){
       if (cellDate.toDateString() === today.toDateString()) cell.classList.add("today");
       cell.appendChild(dn);
 
-      // Une sortie à période ne compte que sur son jour en tête actuel (le reste de la
-      // période se voit dans la bulle du jour en tête, pas étalé sur l'agenda).
-      const cellDateStr = `${cellDate.getFullYear()}-${String(cellDate.getMonth()+1).padStart(2,"0")}-${String(cellDate.getDate()).padStart(2,"0")}`;
-      const dayOutings = [
-        ...outings.filter(o=>{
-          const d = new Date(o.start_at);
-          return d.getFullYear()===cellDate.getFullYear() && d.getMonth()===cellDate.getMonth() && d.getDate()===cellDate.getDate();
-        }),
-        ...periodOutings.filter(o=> periodLeadingDate[o.id] === cellDateStr)
-      ];
+      // Une sortie à période sans jour fixé n'apparaît plus sur la grille : elle vit dans
+      // la liste "En cours" (filtre dédié), tant qu'aucune date n'est confirmée.
+      const dayOutings = outings.filter(o=>{
+        const d = new Date(o.start_at);
+        return d.getFullYear()===cellDate.getFullYear() && d.getMonth()===cellDate.getMonth() && d.getDate()===cellDate.getDate();
+      });
 
       if (dayOutings.length){
         const badge = document.createElement("div");
@@ -2052,6 +2066,38 @@ function renderCalendar(){
     grid.appendChild(cell);
   }
 
+  const ongoingSection = document.getElementById("ongoing-section");
+  ongoingSection.classList.toggle("hidden", !state.filters.onlyOngoing);
+  if (state.filters.onlyOngoing){
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,"0")}-${String(today.getDate()).padStart(2,"0")}`;
+    const ongoingList = document.getElementById("ongoing-list");
+    ongoingList.innerHTML = "";
+    const ongoing = filteredOutings().filter(o=>
+      o.date_mode === "periode" && !o.start_at && o.period_start && o.period_end &&
+      todayStr >= o.period_start && todayStr <= o.period_end
+    );
+    if (ongoing.length === 0){
+      ongoingList.innerHTML = `<p style="font-size:13px;color:var(--ink-soft)">Aucune sortie à période en cours.</p>`;
+    }
+    ongoing.forEach(o=>{
+      const metaHtml = `📅 Du ${dateOnlyToLocalDate(o.period_start).toLocaleDateString("fr-FR",{day:"numeric",month:"short"})} au ${dateOnlyToLocalDate(o.period_end).toLocaleDateString("fr-FR",{day:"numeric",month:"short"})}`;
+      ongoingList.appendChild(buildIdeaCard(o, metaHtml));
+    });
+  }
+}
+
+function buildIdeaCard(o, metaHtml){
+  const card = document.createElement("div");
+  card.className = "idea-card";
+  card.tabIndex = 0;
+  card.setAttribute("role", "button");
+  card.innerHTML = `<div class="t">${o.emoji ? escapeHtml(o.emoji) + " " : ""}${escapeHtml(o.title)}${visibilityBadge(o)}</div><div class="meta">${metaHtml}</div>`;
+  card.addEventListener("click", ()=> openDetail(o.id));
+  card.addEventListener("keydown", (e)=>{ if (e.key==="Enter"||e.key===" "){ e.preventDefault(); openDetail(o.id); } });
+  return card;
+}
+
+function renderIdeasView(){
   const ideasList = document.getElementById("ideas-list");
   ideasList.innerHTML = "";
   const ideas = filteredOutings().filter(o=>!o.start_at && o.status==="idee" && o.date_mode!=="periode");
@@ -2059,14 +2105,8 @@ function renderCalendar(){
     ideasList.innerHTML = `<p style="font-size:13px;color:var(--ink-soft)">Aucune idée pour l'instant.</p>`;
   }
   ideas.forEach(o=>{
-    const card = document.createElement("div");
-    card.className = "idea-card";
-    card.tabIndex = 0;
-    card.setAttribute("role", "button");
-    card.innerHTML = `<div class="t">${o.emoji ? escapeHtml(o.emoji) + " " : ""}${escapeHtml(o.title)}${visibilityBadge(o)}</div><div class="meta">${CATEGORY_EMOJI[o.category]||""} ${CATEGORY_LABELS[o.category]||o.category} · proposée par ${escapeHtml(nameFor(o.created_by))}</div>`;
-    card.addEventListener("click", ()=> openDetail(o.id));
-    card.addEventListener("keydown", (e)=>{ if (e.key==="Enter"||e.key===" "){ e.preventDefault(); openDetail(o.id); } });
-    ideasList.appendChild(card);
+    const metaHtml = `${CATEGORY_EMOJI[o.category]||""} ${CATEGORY_LABELS[o.category]||o.category} · proposée par ${escapeHtml(nameFor(o.created_by))}`;
+    ideasList.appendChild(buildIdeaCard(o, metaHtml));
   });
 }
 
